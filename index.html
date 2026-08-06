@@ -85,8 +85,11 @@
   .btn-gold{ background:linear-gradient(180deg, var(--gold-light), var(--gold-dim)); color:#211a05; box-shadow:0 6px 18px rgba(201,162,39,.25);}
   .btn-ghost{ background:transparent; color:var(--gold-light); border:1.5px solid rgba(201,162,39,.5); }
   .btn-outline{ background:rgba(255,255,255,.04); color:var(--text); border:1px solid rgba(255,255,255,.14); }
-  .btn-experts{ background:linear-gradient(180deg,#2f6b3a,#1c4325); color:#eafff0; box-shadow:0 6px 18px rgba(47,107,58,.35);}
-  .btn-viewers{ background:linear-gradient(180deg,var(--red-light),var(--red)); color:#fff0ee; box-shadow:0 6px 18px rgba(140,34,34,.35);}
+  .btn-score{
+    background:linear-gradient(180deg, #232a1c, #171b12); color:var(--text);
+    border:1.5px solid rgba(201,162,39,.4); box-shadow:0 6px 16px rgba(0,0,0,.35);
+  }
+  .btn-score:active{ background:linear-gradient(180deg, #2a331f, #1b2016); }
   .btn-sm{ min-height:44px; font-size:13px; padding:8px 14px; border-radius:10px; }
   .btn-block{ width:100%; }
   .btn-row{ display:flex; gap:10px; }
@@ -120,44 +123,35 @@
 
   /* ---------- wheel ---------- */
   .wheel-zone{ display:flex; flex-direction:column; align-items:center; gap:16px; padding:10px 0 4px; }
-  .wheel-outer{ position:relative; width:min(72vw,300px); height:min(72vw,300px); }
-  .wheel-face{
-    position:absolute; inset:0; border-radius:50%;
-    background:
-      radial-gradient(circle at 50% 45%, #1a2f1f 0%, #0f2116 60%, #0a170f 100%);
-    border:6px solid var(--gold-dim);
-    box-shadow:0 10px 30px rgba(0,0,0,.6), inset 0 0 40px rgba(0,0,0,.55);
+  .wheel-outer{
+    position:relative; width:min(78vw,320px); height:min(78vw,320px);
+    filter:drop-shadow(0 16px 30px rgba(0,0,0,.6));
   }
-  .wheel-num{
-    position:absolute; top:50%; left:50%; width:30px; height:30px; margin:-15px;
-    display:flex; align-items:center; justify-content:center;
-    transform: rotate(calc(var(--i) * (360deg/13))) translate(0, calc(-1 * (min(72vw,300px) / 2 - 26px))) rotate(calc(-1 * var(--i) * (360deg/13)));
-    font-family:-apple-system,system-ui,sans-serif; font-weight:700; font-size:14px; color:var(--gold-light);
+  .wheel-svg{ width:100%; height:100%; overflow:visible; }
+  .wheel-backdrop{ fill:#070906; }
+  .wheel-bezel-outer{ fill:none; stroke:url(#bezelGrad); stroke-width:5; }
+  .wheel-bezel-inner{ fill:none; stroke:rgba(0,0,0,.5); stroke-width:1.5; }
+  .wedge{ stroke:var(--gold-dim); stroke-width:1; stroke-linejoin:round; }
+  .wedge-a{ fill:#173722; }
+  .wedge-b{ fill:#0f2517; }
+  .wedge-13{ fill:url(#wedge13Grad); stroke:var(--gold-light); stroke-width:1.6; }
+  .wheel-tick{ stroke:var(--gold-dim); stroke-width:1; opacity:.65; }
+  .wheel-tick-major{ stroke:var(--gold-light); stroke-width:1.4; opacity:.85; }
+  .wheel-num-label{
+    font-family:-apple-system,system-ui,sans-serif; font-weight:700; font-size:15px;
+    fill:var(--gold-light); text-anchor:middle; dominant-baseline:central;
+    paint-order:stroke; stroke:rgba(0,0,0,.35); stroke-width:2px;
   }
-  .wheel-num.b13{ color:#ffd76a; font-size:12px; background:radial-gradient(circle, rgba(255,215,106,.25), transparent 70%); border-radius:50%; }
-  .wheel-hub{
-    position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px;
-    border-radius:50%; background:radial-gradient(circle, var(--gold-light), var(--gold-dim));
-    box-shadow:0 2px 8px rgba(0,0,0,.5); z-index:3;
-  }
-  .wheel-arrow{
-    position:absolute; top:50%; left:50%; width:8px; height:calc(min(72vw,300px)/2 - 14px);
-    margin-left:-4px; margin-top:calc(-1 * (min(72vw,300px)/2 - 14px));
-    transform-origin:50% 100%;
-    transform:rotate(0deg);
+  .wheel-num-label.b13{ fill:#2a1c05; font-size:15px; font-weight:800; stroke:none; }
+  .wheel-gloss{ fill:url(#glossGrad); pointer-events:none; }
+  .wheel-arrow-g{
+    transform-box:view-box; transform-origin:100px 100px;
     transition: transform 3.2s cubic-bezier(.14,.85,.28,1);
-    z-index:2;
   }
-  .wheel-arrow::before{
-    content:''; position:absolute; left:50%; top:0; width:0; height:0; margin-left:-11px;
-    border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:26px solid var(--gold-light);
-    filter:drop-shadow(0 3px 4px rgba(0,0,0,.5));
-  }
-  .wheel-arrow::after{
-    content:''; position:absolute; left:50%; bottom:-6px; width:14px; height:100%; margin-left:-3px; width:6px;
-    background:linear-gradient(180deg, var(--gold-light), var(--gold-dim));
-    border-radius:3px;
-  }
+  .wheel-arrow-shape{ fill:url(#arrowGrad); stroke:#5a4715; stroke-width:.75; filter:drop-shadow(0 3px 5px rgba(0,0,0,.55)); }
+  .wheel-arrow-spine{ stroke:rgba(255,255,255,.35); stroke-width:1; }
+  .wheel-hub-outer{ fill:url(#hubGrad); stroke:#3a2f10; stroke-width:1.5; }
+  .wheel-hub-inner{ fill:#100c04; }
 
   /* ---------- flavor ---------- */
   .flavor-card{ text-align:center; padding:22px 16px; }
@@ -195,8 +189,9 @@
   .attribution{ font-size:12px; color:var(--muted); font-family:-apple-system,system-ui,sans-serif; text-align:left; line-height:1.6; }
 
   .score-buttons{ display:flex; gap:14px; margin-top:18px; }
-  .score-buttons .btn{ flex:1; flex-direction:column; min-height:74px; }
-  .score-buttons .btn small{ font-weight:400; opacity:.85; font-size:11px; }
+  .score-buttons .btn{ flex:1; flex-direction:column; min-height:74px; gap:6px; }
+  .score-dot{ width:11px; height:11px; border-radius:50%; display:inline-block; box-shadow:0 0 6px currentColor; }
+  .score-buttons .btn span.label{ font-weight:700; font-size:15px; }
 
   .undo-bar{ display:flex; justify-content:center; margin-top:10px; }
 
@@ -2350,8 +2345,8 @@ function freshState(){
     justResetPool:false,
     justResetBonusPool:false,
     currentBonus:null,
-    early:false,
-    earlySeconds:null,
+    usedBonusMinute:false,
+    bonusSecondsUsed:null,
     undoSnapshot:null,
   };
 }
@@ -2368,7 +2363,7 @@ function safeLoad(){
       // никогда не восстанавливаем игру "в процессе" с активным таймером - только пройденный прогресс
       if(state.phase === 'round'){
         // безопасно вернуть на экран настройки, чтобы не тащить сломанный таймер между сессиями
-        if(state.roundPhase === 'timerRunning' || state.roundPhase === 'timerPaused'){
+        if(['timerRunning','timerPaused','bonusMinute','bonusMinutePaused'].indexOf(state.roundPhase) !== -1){
           state.roundPhase = 'question';
         }
       }
@@ -2476,8 +2471,8 @@ function drawGame(){
   state.remainingNumbers = state.questions.map((_,i)=>i+1);
   state.timeDebt = 0;
   state.currentBonus = null;
-  state.early = false;
-  state.earlySeconds = null;
+  state.usedBonusMinute = false;
+  state.bonusSecondsUsed = null;
   state.undoSnapshot = null;
   state.phase = 'round';
   state.roundPhase = 'intro';
@@ -2493,9 +2488,20 @@ function newGamePreservingHistory(){
    6. ВОЛЧОК
    ========================================================================= */
 const SECTOR_COUNT = 13;
+const SECTOR_STEP = 360 / SECTOR_COUNT;
 function sectorAngle(n){ // n: 1..12 обычный номер, 13 = бонус
   const idx = (n === 13) ? 12 : (n - 1);
-  return idx * (360 / SECTOR_COUNT);
+  return idx * SECTOR_STEP;
+}
+function polarPoint(cx, cy, r, angleDeg){
+  const a = (angleDeg - 90) * Math.PI / 180; // 0° = "12 часов" (верх)
+  return [ (cx + r*Math.cos(a)).toFixed(2), (cy + r*Math.sin(a)).toFixed(2) ];
+}
+function wedgePath(cx, cy, r, startAngle, endAngle){
+  const [x1,y1] = polarPoint(cx, cy, r, startAngle);
+  const [x2,y2] = polarPoint(cx, cy, r, endAngle);
+  const largeArc = (endAngle - startAngle) > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
 }
 function spinTo(targetNumber){
   const targetAngle = sectorAngle(targetNumber);
@@ -2591,13 +2597,14 @@ function pauseTimer(){
   timerState.remainingMs = Math.max(0, timerState.endsAt - performance.now());
   timerState.running = false;
   if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
-  state.roundPhase = 'timerPaused';
+  state.roundPhase = (state.roundPhase === 'bonusMinute') ? 'bonusMinutePaused' : 'timerPaused';
+  safeSave();
   render();
 }
 function resumeTimer(){
   timerState.endsAt = performance.now() + timerState.remainingMs;
   timerState.running = true;
-  state.roundPhase = 'timerRunning';
+  state.roundPhase = (state.roundPhase === 'bonusMinutePaused') ? 'bonusMinute' : 'timerRunning';
   render();
   tickLoop();
 }
@@ -2623,6 +2630,9 @@ function tickLoop(){
     timerState.running = false;
     tickedLastSeconds = null;
     playEndGong();
+    if(state.roundPhase === 'bonusMinute'){
+      state.bonusSecondsUsed = 60; // доп. минута выработана полностью
+    }
     state.roundPhase = 'answer-ready'; // истекло, но ответ ещё не открыт
     renderTimerDoneState();
     return;
@@ -2654,12 +2664,29 @@ function updateTimerDOM(running, remainingMsOverride){
   else if(secs <= 20){ ring.classList.add('warn'); }
 }
 function stopEarly(){
+  // "Досрочный ответ" во время основного отсчёта: знатоки готовы раньше
+  // времени — по правилам это даёт им дополнительную минуту на то, чтобы
+  // сформулировать точный ответ, а не мгновенно завершает раунд.
+  if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  state.usedBonusMinute = true;
+  state.bonusSecondsUsed = null;
+  timerState.durationMs = 60000;
+  timerState.remainingMs = 60000;
+  timerState.endsAt = performance.now() + 60000;
+  timerState.running = true;
+  state.roundPhase = 'bonusMinute';
+  playStartTone();
+  safeSave();
+  render();
+  tickLoop();
+}
+function finalizeBonusMinute(){
+  // знатоки подтверждают готовность до истечения дополнительной минуты
   if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
   timerState.running = false;
   const remaining = Math.max(0, (timerState.endsAt||performance.now()) - performance.now());
   const elapsedSec = Math.round((timerState.durationMs - remaining)/1000);
-  state.early = true;
-  state.earlySeconds = elapsedSec;
+  state.bonusSecondsUsed = elapsedSec;
   state.roundPhase = 'answer-ready';
   safeSave();
   render();
@@ -2692,11 +2719,11 @@ function scoreRound(correct){
     questionId: q.id,
     question: q.question,
     correct: correct,
-    early: state.early,
-    earlySeconds: state.earlySeconds,
+    usedBonusMinute: state.usedBonusMinute,
+    bonusSecondsUsed: state.bonusSecondsUsed,
   });
-  state.early = false;
-  state.earlySeconds = null;
+  state.usedBonusMinute = false;
+  state.bonusSecondsUsed = null;
   state.roundPhase = 'scored';
   safeSave();
   render();
@@ -2760,9 +2787,11 @@ function render(){
   else html = renderSummary();
   app.innerHTML = html;
   attachEvents();
-  if(state.phase === 'round' && (state.roundPhase === 'timerRunning' || state.roundPhase === 'timerPaused')){
+  const timerPhases = ['timerRunning','timerPaused','bonusMinute','bonusMinutePaused'];
+  if(state.phase === 'round' && timerPhases.indexOf(state.roundPhase) !== -1){
     // восстановление визуального состояния таймера при перерисовке во время хода
-    const remaining = state.roundPhase === 'timerPaused' ? timerState.remainingMs : undefined;
+    const isPaused = state.roundPhase === 'timerPaused' || state.roundPhase === 'bonusMinutePaused';
+    const remaining = isPaused ? timerState.remainingMs : undefined;
     updateTimerDOM(true, remaining);
   }
 }
@@ -2799,19 +2828,60 @@ function renderScoreboard(){
 }
 
 function renderWheel(){
-  let nums = '';
-  for(let i=1;i<=12;i++){
-    nums += `<div class="wheel-num" style="--i:${i-1}">${i}</div>`;
+  const cx=100, cy=100;
+  const rOuter=90, rBezel=93, rTick=98, rTickMajor=101, rLabel=71;
+  let wedges='', ticks='', labels='';
+  for(let idx=0; idx<SECTOR_COUNT; idx++){
+    const center = idx * SECTOR_STEP;
+    const start = center - SECTOR_STEP/2;
+    const end = center + SECTOR_STEP/2;
+    const isBonus = idx === 12;
+    const wedgeCls = isBonus ? 'wedge wedge-13' : ('wedge ' + (idx%2===0 ? 'wedge-a' : 'wedge-b'));
+    wedges += `<path class="${wedgeCls}" d="${wedgePath(cx,cy,rOuter,start,end)}"/>`;
+
+    const [tx1,ty1] = polarPoint(cx,cy,rOuter-3,start);
+    const [tx2,ty2] = polarPoint(cx,cy,rTickMajor,start);
+    ticks += `<line class="wheel-tick-major" x1="${tx1}" y1="${ty1}" x2="${tx2}" y2="${ty2}"/>`;
+
+    const [lx,ly] = polarPoint(cx,cy,rLabel,center);
+    labels += `<text class="wheel-num-label${isBonus?' b13':''}" x="${lx}" y="${ly}">${isBonus?'13':(idx+1)}</text>`;
   }
-  nums += `<div class="wheel-num b13" style="--i:12">13</div>`;
+  const svg = `
+  <svg class="wheel-svg" viewBox="0 0 200 200">
+    <defs>
+      <linearGradient id="bezelGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#eccd6a"/><stop offset="55%" stop-color="#8a712a"/><stop offset="100%" stop-color="#eccd6a"/>
+      </linearGradient>
+      <linearGradient id="wedge13Grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e0b23a"/><stop offset="100%" stop-color="#8a611a"/>
+      </linearGradient>
+      <radialGradient id="hubGrad" cx="35%" cy="30%" r="75%">
+        <stop offset="0" stop-color="#f5e0a0"/><stop offset="55%" stop-color="#c9a227"/><stop offset="100%" stop-color="#7a5c14"/>
+      </radialGradient>
+      <linearGradient id="arrowGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f5e0a0"/><stop offset="50%" stop-color="#eccd6a"/><stop offset="100%" stop-color="#a4841f"/>
+      </linearGradient>
+      <radialGradient id="glossGrad" cx="50%" cy="18%" r="55%">
+        <stop offset="0" stop-color="rgba(255,255,255,.16)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+    <circle class="wheel-backdrop" cx="100" cy="100" r="96"/>
+    <g>${wedges}</g>
+    <g>${ticks}</g>
+    <circle class="wheel-bezel-outer" cx="100" cy="100" r="${rBezel}"/>
+    <circle class="wheel-bezel-inner" cx="100" cy="100" r="${rOuter-1}"/>
+    <g>${labels}</g>
+    <circle class="wheel-gloss" cx="100" cy="100" r="${rOuter}"/>
+    <g class="wheel-arrow-g" id="wheel-arrow" style="transform:rotate(${state.wheelRotation}deg)">
+      <line class="wheel-arrow-spine" x1="100" y1="20" x2="100" y2="100"/>
+      <path class="wheel-arrow-shape" d="M 100 14 L 109 78 L 100 96 L 91 78 Z"/>
+    </g>
+    <circle class="wheel-hub-outer" cx="100" cy="100" r="15"/>
+    <circle class="wheel-hub-inner" cx="100" cy="100" r="5.5"/>
+  </svg>`;
   return `
   <div class="wheel-zone">
-    <div class="wheel-outer">
-      <div class="wheel-face"></div>
-      ${nums}
-      <div class="wheel-arrow" id="wheel-arrow" style="transform:rotate(${state.wheelRotation}deg)"></div>
-      <div class="wheel-hub"></div>
-    </div>
+    <div class="wheel-outer">${svg}</div>
     <button class="btn btn-gold" id="btn-spin">🎡 Крутить волчок</button>
   </div>`;
 }
@@ -2890,13 +2960,36 @@ function renderRound(){
       </div>
       <button class="btn btn-gold btn-block" id="btn-early-answer">🔔 Досрочный ответ</button>
     </div>`;
+  } else if(rp === 'bonusMinute' || rp === 'bonusMinutePaused'){
+    const paused = rp === 'bonusMinutePaused';
+    body = `
+    <div class="card">
+      <div class="question-text" style="font-size:clamp(15px,4vw,17px); opacity:.85;">${nl2br(q.question)}</div>
+    </div>
+    <div class="banner">✨ Дополнительная минута — знатоки уточняют и формулируют ответ</div>
+    <div class="timer-zone">
+      <div class="timer-ring-wrap">
+        <svg viewBox="0 0 120 120">
+          <circle class="timer-ring-bg" cx="60" cy="60" r="54"/>
+          <circle class="timer-ring-fg" id="timer-ring-fg" cx="60" cy="60" r="54"/>
+        </svg>
+        <div class="timer-digits" id="timer-digits">--:--</div>
+      </div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-outline btn-block" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
+      <button class="btn btn-gold btn-block" id="btn-bonus-minute-done">✅ Ответ готов</button>
+    </div>`;
   } else if(rp === 'answer-ready'){
+    const readyMsg = state.usedBonusMinute
+      ? `Ответ готов — доп. минута использована${state.bonusSecondsUsed!=null ? ` (${state.bonusSecondsUsed} сек из 60)` : ''}`
+      : 'Время вышло!';
     body = `
     <div class="card">
       <div class="question-text" style="font-size:clamp(15px,4vw,17px); opacity:.85;">${nl2br(q.question)}</div>
     </div>
     <div class="card center" style="margin-top:12px;">
-      <div class="muted">${state.early ? `Ответ дан досрочно — за ${state.earlySeconds} сек` : 'Время вышло!'}</div>
+      <div class="muted">${readyMsg}</div>
     </div>
     <div class="action-bar">
       <button class="btn btn-gold btn-block" id="btn-reveal-answer">Показать ответ</button>
@@ -2915,8 +3008,8 @@ function renderRound(){
       ${attrBits.length ? `<div class="attribution">${attrBits.join('<br>')}</div>` : ''}
     </div>
     <div class="score-buttons">
-      <button class="btn btn-experts" id="btn-score-experts">✅<br><small>Знатоки</small></button>
-      <button class="btn btn-viewers" id="btn-score-viewers">❌<br><small>Телезрители</small></button>
+      <button class="btn btn-score" id="btn-score-experts"><span class="score-dot" style="color:#78d78e; background:#78d78e;"></span><span class="label">Знатоки</span></button>
+      <button class="btn btn-score" id="btn-score-viewers"><span class="score-dot" style="color:#ef8378; background:#ef8378;"></span><span class="label">Телезрители</span></button>
     </div>`;
   } else if(rp === 'scored'){
     const last = state.results[state.results.length-1];
@@ -2998,6 +3091,7 @@ function attachEvents(){
   once('btn-pause-resume', () => { timerState.running ? pauseTimer() : resumeTimer(); });
   once('btn-credit-minute', extendTimerCredit);
   once('btn-early-answer', stopEarly);
+  once('btn-bonus-minute-done', finalizeBonusMinute);
   once('btn-reveal-answer', revealAnswer);
   once('btn-score-experts', () => scoreRound(true));
   once('btn-score-viewers', () => scoreRound(false));
