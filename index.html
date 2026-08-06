@@ -1,0 +1,3028 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="hz:canvas-width" content="480">
+<title>Что? Где? Когда? — пульт ведущего</title>
+<style>
+  :root{
+    --bg:#0a0c09;
+    --bg2:#111309;
+    --felt-a:#0f2a1c;
+    --felt-b:#0a2016;
+    --card:#161a13;
+    --card-2:#1d2318;
+    --gold:#c9a227;
+    --gold-light:#eccd6a;
+    --gold-dim:#8a712a;
+    --red:#8c2222;
+    --red-light:#d0453a;
+    --text:#f3ecd8;
+    --muted:#a9a08a;
+    --ring-bg:#2a2a20;
+    --shadow:rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    min-height:100dvh;
+    background:
+      radial-gradient(ellipse at 20% -10%, rgba(201,162,39,.10), transparent 55%),
+      radial-gradient(ellipse at 100% 0%, rgba(201,162,39,.06), transparent 45%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    color:var(--text);
+    font-family: Georgia, 'Times New Roman', 'PT Serif', serif;
+    display:flex; flex-direction:column; align-items:stretch;
+    user-select:none; -webkit-user-select:none;
+    overflow-x:hidden;
+  }
+  #app{ flex:1; display:flex; flex-direction:column; }
+  .wrap{ max-width:640px; margin:0 auto; width:100%; padding:14px 16px calc(18px + env(safe-area-inset-bottom)); flex:1; display:flex; flex-direction:column; }
+
+  header.top{
+    display:flex; align-items:center; gap:10px; justify-content:center;
+    padding:12px 16px 6px; text-align:center;
+  }
+  header.top .owl{ width:34px; height:34px; flex:none; }
+  header.top h1{
+    font-size:clamp(16px,4.4vw,22px); margin:0; letter-spacing:.04em;
+    font-weight:700; color:var(--gold-light);
+    text-shadow:0 1px 0 rgba(0,0,0,.5);
+  }
+
+  .card{
+    background:linear-gradient(180deg, var(--card-2), var(--card));
+    border:1px solid rgba(201,162,39,.25);
+    border-radius:16px;
+    box-shadow:0 10px 30px var(--shadow), inset 0 1px 0 rgba(255,255,255,.03);
+    padding:18px 16px;
+  }
+
+  h2.section-title{
+    font-size:clamp(15px,3.6vw,18px); color:var(--gold-light); margin:0 0 12px;
+    text-align:center; letter-spacing:.03em; font-weight:700;
+  }
+
+  label.field-label{ display:block; font-size:13px; color:var(--muted); margin:14px 0 6px; font-family: -apple-system, system-ui, sans-serif;}
+  input[type=text], input[type=number]{
+    width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(201,162,39,.35);
+    background:#0d100b; color:var(--text); font-size:16px; font-family: -apple-system, system-ui, sans-serif;
+  }
+  input:focus{ outline:2px solid var(--gold); }
+
+  .btn{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    min-height:58px; padding:12px 18px; border-radius:14px; border:none;
+    font-size:clamp(15px,4vw,17px); font-weight:700; cursor:pointer;
+    font-family: -apple-system, system-ui, sans-serif; letter-spacing:.01em;
+    transition:transform .08s ease, filter .15s ease, opacity .15s ease;
+    -webkit-user-select:none;
+  }
+  .btn:active{ transform:scale(.97); }
+  .btn[disabled]{ opacity:.45; pointer-events:none; }
+  .btn-gold{ background:linear-gradient(180deg, var(--gold-light), var(--gold-dim)); color:#211a05; box-shadow:0 6px 18px rgba(201,162,39,.25);}
+  .btn-ghost{ background:transparent; color:var(--gold-light); border:1.5px solid rgba(201,162,39,.5); }
+  .btn-outline{ background:rgba(255,255,255,.04); color:var(--text); border:1px solid rgba(255,255,255,.14); }
+  .btn-experts{ background:linear-gradient(180deg,#2f6b3a,#1c4325); color:#eafff0; box-shadow:0 6px 18px rgba(47,107,58,.35);}
+  .btn-viewers{ background:linear-gradient(180deg,var(--red-light),var(--red)); color:#fff0ee; box-shadow:0 6px 18px rgba(140,34,34,.35);}
+  .btn-sm{ min-height:44px; font-size:13px; padding:8px 14px; border-radius:10px; }
+  .btn-block{ width:100%; }
+  .btn-row{ display:flex; gap:10px; }
+
+  .muted{ color:var(--muted); font-family:-apple-system, system-ui, sans-serif; font-size:13px; }
+  .center{ text-align:center; }
+
+  /* ---------- setup ---------- */
+  .setup-stack{ display:flex; flex-direction:column; gap:6px; margin-top:6px;}
+  .pool-stat{ text-align:center; font-family:-apple-system, system-ui, sans-serif; font-size:12.5px; color:var(--muted); margin-top:10px;}
+  .banner{
+    background:rgba(201,162,39,.12); border:1px solid rgba(201,162,39,.4); color:var(--gold-light);
+    border-radius:10px; padding:10px 12px; font-size:13px; font-family:-apple-system, system-ui, sans-serif;
+    margin:10px 0; text-align:center;
+  }
+
+  /* ---------- scoreboard ---------- */
+  .scoreboard{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:radial-gradient(ellipse at center, var(--felt-a), var(--felt-b));
+    border:1px solid rgba(201,162,39,.3); border-radius:14px; padding:10px 14px; margin-bottom:14px;
+    box-shadow:inset 0 0 30px rgba(0,0,0,.4);
+  }
+  .score-side{ text-align:center; flex:1; }
+  .score-side .label{ font-size:11px; letter-spacing:.08em; color:var(--muted); font-family:-apple-system,system-ui,sans-serif; text-transform:uppercase;}
+  .score-side .num{ font-size:clamp(26px,7vw,34px); font-weight:800; line-height:1.1; }
+  .score-side.experts .num{ color:#78d78e; }
+  .score-side.viewers .num{ color:#ef8378; }
+  .score-mid{ font-size:20px; color:var(--gold); opacity:.7; font-weight:400; }
+  .round-counter{ text-align:center; font-family:-apple-system,system-ui,sans-serif; font-size:12.5px; color:var(--muted); margin-bottom:10px; letter-spacing:.03em;}
+
+  /* ---------- wheel ---------- */
+  .wheel-zone{ display:flex; flex-direction:column; align-items:center; gap:16px; padding:10px 0 4px; }
+  .wheel-outer{ position:relative; width:min(72vw,300px); height:min(72vw,300px); }
+  .wheel-face{
+    position:absolute; inset:0; border-radius:50%;
+    background:
+      radial-gradient(circle at 50% 45%, #1a2f1f 0%, #0f2116 60%, #0a170f 100%);
+    border:6px solid var(--gold-dim);
+    box-shadow:0 10px 30px rgba(0,0,0,.6), inset 0 0 40px rgba(0,0,0,.55);
+  }
+  .wheel-num{
+    position:absolute; top:50%; left:50%; width:30px; height:30px; margin:-15px;
+    display:flex; align-items:center; justify-content:center;
+    transform: rotate(calc(var(--i) * (360deg/13))) translate(0, calc(-1 * (min(72vw,300px) / 2 - 26px))) rotate(calc(-1 * var(--i) * (360deg/13)));
+    font-family:-apple-system,system-ui,sans-serif; font-weight:700; font-size:14px; color:var(--gold-light);
+  }
+  .wheel-num.b13{ color:#ffd76a; font-size:12px; background:radial-gradient(circle, rgba(255,215,106,.25), transparent 70%); border-radius:50%; }
+  .wheel-hub{
+    position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px;
+    border-radius:50%; background:radial-gradient(circle, var(--gold-light), var(--gold-dim));
+    box-shadow:0 2px 8px rgba(0,0,0,.5); z-index:3;
+  }
+  .wheel-arrow{
+    position:absolute; top:50%; left:50%; width:8px; height:calc(min(72vw,300px)/2 - 14px);
+    margin-left:-4px; margin-top:calc(-1 * (min(72vw,300px)/2 - 14px));
+    transform-origin:50% 100%;
+    transform:rotate(0deg);
+    transition: transform 3.2s cubic-bezier(.14,.85,.28,1);
+    z-index:2;
+  }
+  .wheel-arrow::before{
+    content:''; position:absolute; left:50%; top:0; width:0; height:0; margin-left:-11px;
+    border-left:11px solid transparent; border-right:11px solid transparent; border-bottom:26px solid var(--gold-light);
+    filter:drop-shadow(0 3px 4px rgba(0,0,0,.5));
+  }
+  .wheel-arrow::after{
+    content:''; position:absolute; left:50%; bottom:-6px; width:14px; height:100%; margin-left:-3px; width:6px;
+    background:linear-gradient(180deg, var(--gold-light), var(--gold-dim));
+    border-radius:3px;
+  }
+
+  /* ---------- flavor ---------- */
+  .flavor-card{ text-align:center; padding:22px 16px; }
+  .flavor-card .from{ font-size:13px; color:var(--muted); font-family:-apple-system,system-ui,sans-serif; margin-bottom:6px;}
+  .flavor-card .who{ font-size:clamp(17px,5vw,21px); color:var(--gold-light); font-weight:700; }
+  .flavor-card .city{ font-size:clamp(15px,4.4vw,18px); color:var(--text); margin-top:4px; }
+
+  /* ---------- question ---------- */
+  .question-text{
+    font-size:clamp(18px,5.4vw,23px); line-height:1.5; text-align:center; padding:6px 4px 4px;
+  }
+  .qmeta{ text-align:center; margin-top:14px; font-family:-apple-system,system-ui,sans-serif; font-size:12px; color:var(--muted); }
+
+  /* ---------- timer ---------- */
+  .timer-zone{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:8px 0; }
+  .timer-ring-wrap{ position:relative; width:min(58vw,240px); height:min(58vw,240px); }
+  .timer-ring-wrap svg{ width:100%; height:100%; transform:rotate(-90deg); }
+  .timer-ring-bg{ fill:none; stroke:var(--ring-bg); stroke-width:12; }
+  .timer-ring-fg{ fill:none; stroke:var(--gold); stroke-width:12; stroke-linecap:round; transition:stroke .3s ease; }
+  .timer-digits{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:clamp(38px,11vw,56px); font-weight:800; font-family:-apple-system,system-ui,sans-serif;
+  }
+  .timer-ring-fg.warn{ stroke:#e0b23a; }
+  .timer-ring-fg.danger{ stroke:var(--red-light); }
+  .timer-digits.danger{ color:var(--red-light); }
+  .debt-note{ text-align:center; font-size:12px; color:#e0b23a; font-family:-apple-system,system-ui,sans-serif; }
+
+  /* ---------- answer ---------- */
+  .answer-block{ text-align:center; }
+  .answer-label{ font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-family:-apple-system,system-ui,sans-serif;}
+  .answer-text{ font-size:clamp(19px,5.6vw,24px); color:var(--gold-light); font-weight:700; margin:6px 0 14px; }
+  .accept-text{ font-size:13px; color:var(--muted); font-family:-apple-system,system-ui,sans-serif; margin-top:-8px; margin-bottom:14px;}
+  .comment-text{ font-size:15px; line-height:1.5; color:var(--text); text-align:left; background:rgba(255,255,255,.03); border-radius:10px; padding:12px 14px; margin-bottom:10px;}
+  .attribution{ font-size:12px; color:var(--muted); font-family:-apple-system,system-ui,sans-serif; text-align:left; line-height:1.6; }
+
+  .score-buttons{ display:flex; gap:14px; margin-top:18px; }
+  .score-buttons .btn{ flex:1; flex-direction:column; min-height:74px; }
+  .score-buttons .btn small{ font-weight:400; opacity:.85; font-size:11px; }
+
+  .undo-bar{ display:flex; justify-content:center; margin-top:10px; }
+
+  /* ---------- action bar ---------- */
+  .action-bar{ margin-top:16px; display:flex; flex-direction:column; gap:10px; }
+  .secondary-row{ display:flex; gap:10px; }
+  .secondary-row .btn{ flex:1; }
+
+  /* ---------- summary ---------- */
+  .final-score{ text-align:center; padding:8px 0 6px; }
+  .final-score .big{ font-size:clamp(40px,13vw,60px); font-weight:800; }
+  .final-score .who{ font-size:14px; color:var(--muted); font-family:-apple-system,system-ui,sans-serif; margin-top:4px;}
+  .result-list{ margin-top:16px; display:flex; flex-direction:column; gap:8px; }
+  .result-row{
+    display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px;
+    background:rgba(255,255,255,.03); font-family:-apple-system,system-ui,sans-serif; font-size:13px;
+  }
+  .result-row .dot{ width:10px; height:10px; border-radius:50%; flex:none; }
+  .result-row .dot.ok{ background:#78d78e; }
+  .result-row .dot.no{ background:#ef8378; }
+  .result-row .qn{ color:var(--muted); flex:none; width:20px; }
+  .result-row .qt{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .owl-watermark{ position:fixed; right:-30px; bottom:-30px; width:220px; opacity:.03; pointer-events:none; z-index:0;}
+
+  ::selection{ background: rgba(201,162,39,.35); }
+</style>
+</head>
+<body>
+<div class="owl-watermark">
+  <svg viewBox="0 0 100 100" fill="currentColor" style="color:var(--gold)">
+    <ellipse cx="50" cy="58" rx="34" ry="38"/>
+    <circle cx="34" cy="42" r="14"/><circle cx="66" cy="42" r="14"/>
+    <circle cx="34" cy="42" r="6" fill="#0a0c09"/><circle cx="66" cy="42" r="6" fill="#0a0c09"/>
+    <polygon points="50,50 44,62 56,62"/>
+  </svg>
+</div>
+<div id="app"></div>
+
+<template id="tpl-owl">
+  <svg class="owl" viewBox="0 0 100 100" aria-hidden="true">
+    <ellipse cx="50" cy="60" rx="30" ry="34" fill="url(#og)"/>
+    <circle cx="36" cy="44" r="13" fill="#0d100b" stroke="#c9a227" stroke-width="2.5"/>
+    <circle cx="64" cy="44" r="13" fill="#0d100b" stroke="#c9a227" stroke-width="2.5"/>
+    <circle cx="36" cy="44" r="5" fill="#eccd6a"/>
+    <circle cx="64" cy="44" r="5" fill="#eccd6a"/>
+    <polygon points="50,50 45,60 55,60" fill="#eccd6a"/>
+    <path d="M20 40 Q30 20 42 34 Z" fill="#c9a227"/>
+    <path d="M80 40 Q70 20 58 34 Z" fill="#c9a227"/>
+    <defs>
+      <linearGradient id="og" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#8a712a"/><stop offset="1" stop-color="#3a2f10"/>
+      </linearGradient>
+    </defs>
+  </svg>
+</template>
+
+<script>
+'use strict';
+
+/* =========================================================================
+   1. ДАННЫЕ: города, отправители, бонусные вопросы 13-го сектора
+   (основная база QUESTIONS подставляется отдельным блоком ниже)
+   ========================================================================= */
+
+const CITIES = [
+  "Москва","Санкт-Петербург","Новосибирск","Екатеринбург","Нижний Новгород",
+  "Казань","Челябинск","Омск","Самара","Ростов-на-Дону","Уфа","Красноярск",
+  "Пермь","Воронеж","Волгоград","Краснодар","Саратов","Тюмень","Тольятти",
+  "Ижевск","Барнаул","Ульяновск","Иркутск","Хабаровск","Ярославль",
+  "Владивосток","Томск","Кемерово","Рязань","Набережные Челны","Астрахань",
+  "Пенза","Липецк","Киров","Чебоксары","Калининград","Тула","Курск",
+  "Мурманск","Сочи","Минск","Алматы","Ереван","Тбилиси","Баку","Бишкек"
+];
+
+const SENDERS = [
+  {name:"Анна Соколова", verb:"прислала"},
+  {name:"Дмитрий Волков", verb:"прислал"},
+  {name:"Мария Кузнецова", verb:"прислала"},
+  {name:"Игорь Смирнов", verb:"прислал"},
+  {name:"Елена Попова", verb:"прислала"},
+  {name:"Сергей Морозов", verb:"прислал"},
+  {name:"Ольга Новикова", verb:"прислала"},
+  {name:"Андрей Лебедев", verb:"прислал"},
+  {name:"Наталья Козлова", verb:"прислала"},
+  {name:"Павел Егоров", verb:"прислал"},
+  {name:"Ирина Соловьёва", verb:"прислала"},
+  {name:"Алексей Воробьёв", verb:"прислал"},
+  {name:"Татьяна Фёдорова", verb:"прислала"},
+  {name:"Михаил Голубев", verb:"прислал"},
+  {name:"Светлана Никитина", verb:"прислала"},
+  {name:"Роман Захаров", verb:"прислал"},
+  {name:"Юлия Крылова", verb:"прислала"},
+  {name:"Артём Королёв", verb:"прислал"},
+  {name:"Виктория Зайцева", verb:"прислала"},
+  {name:"Никита Орлов", verb:"прислал"},
+  {name:"Ксения Комарова", verb:"прислала"},
+  {name:"Владимир Медведев", verb:"прислал"},
+  {name:"Дарья Белова", verb:"прислала"},
+  {name:"Константин Куликов", verb:"прислал"},
+  {name:"Полина Гусева", verb:"прислала"},
+  {name:"Максим Тарасов", verb:"прислал"},
+  {name:"Вера Максимова", verb:"прислала"},
+  {name:"Фёдор Панфилов", verb:"прислал"},
+  {name:"Александра Дмитриева", verb:"прислала"},
+  {name:"Егор Сафонов", verb:"прислал"},
+  {name:"Марина Кириллова", verb:"прислала"},
+  {name:"Виталий Мельников", verb:"прислал"},
+  {name:"Евгения Родионова", verb:"прислала"},
+  {name:"Григорий Афанасьев", verb:"прислал"}
+];
+
+const BONUS_QUESTIONS = [
+  {
+    question:"Как называется одним словом боязнь числа тринадцать?",
+    answer:"Трискаидекафобия",
+    comment:"Забавное совпадение: этот термин отлично подходит именно к сектору №13."
+  },
+  {
+    question:"Назовите единственный месяц, который в невисокосный год состоит ровно из четырёх календарных недель, без единого лишнего дня.",
+    answer:"Февраль",
+    comment:"28 дней — это ровно 4×7, единственный такой случай среди месяцев."
+  },
+  {
+    question:"Скрипка, арфа, виолончель, флейта — какой из этих четырёх инструментов не струнный?",
+    answer:"Флейта",
+    comment:"Флейта — духовой инструмент, остальные три — струнные."
+  },
+  {
+    question:"Продолжите русскую пословицу: «Тише едешь — …»",
+    answer:"…дальше будешь",
+    comment:"Пословица о пользе неспешности и терпения."
+  },
+  {
+    question:"Сколько будет, если сложить все целые числа от 1 до 10 включительно?",
+    answer:"55",
+    comment:"Сумма арифметической прогрессии: (1+10)×10÷2 = 55."
+  },
+  {
+    question:"Воробей, летучая мышь, ласточка, стриж — назовите единственное млекопитающее из перечисленных.",
+    answer:"Летучая мышь",
+    comment:"Остальные три — птицы, летучая мышь — млекопитающее, хоть и умеет летать."
+  },
+  {
+    question:"Как в народе называют дорожный знак «Въезд запрещён» — белый прямоугольник на красном круге?",
+    answer:"«Кирпич»",
+    comment:"Белый прямоугольник на красном фоне действительно похож на кирпич."
+  },
+  {
+    question:"Назовите столицу Австралии. Подсказка: это не Сидней и не Мельбурн.",
+    answer:"Канберра",
+    comment:"Канберру построили специально как компромисс между соперничавшими за этот статус Сиднеем и Мельбурном."
+  },
+  {
+    question:"Какой овощ традиционно вырезают в виде светящегося фонаря на Хэллоуин?",
+    answer:"Тыкву",
+    comment:"Изначально в Ирландии для этого использовали репу, а в Америке прижилась более крупная тыква."
+  },
+  {
+    question:"Сколько нот в стандартной музыкальной гамме, прежде чем она повторится через октаву?",
+    answer:"Семь",
+    comment:"До, ре, ми, фа, соль, ля, си — восьмая нота уже открывает следующую октаву."
+  },
+  {
+    question:"Как называется страх перед пятницей, 13-м числом — более длинным термином, чем просто «трискаидекафобия»?",
+    answer:"Параскевидекатриафобия",
+    comment:"Составлено из греческих корней: «параскеви» — пятница, «декатриа» — тринадцать."
+  },
+  {
+    question:"Согласно расхожему поверью, сколько жизней у кошки?",
+    answer:"Девять",
+    comment:"Поверье связано с удивительной живучестью и ловкостью кошек."
+  },
+  {
+    question:"Назовите одним словом группу волков.",
+    answer:"Стая",
+    comment:"Волчья стая обычно состоит из одной семьи с чётко выстроенной иерархией."
+  },
+  {
+    question:"Какая шахматная фигура на пустой доске может пройти за один ход больше всего клеток по прямой?",
+    answer:"Ферзь",
+    comment:"Ферзь объединяет в себе ходы ладьи и слона — самая дальнобойная фигура в игре."
+  }
+];
+
+/* =========================================================================
+   QUESTIONS_START — основная база вопросов ЧГК (подставляется отдельно)
+   ========================================================================= */
+const QUESTIONS = [
+ {
+  "id": 1,
+  "question": "Лемми как-то заметил: \"Наша жизнь на Земле может показаться кому-то очень дорогой, но не стоит забывать, что в ее стоимость входит ежегодный бесплатный полет\". Обозначьте маршрут этого полета.",
+  "answer": "Вокруг Солнца.",
+  "acceptable": "",
+  "comment": "Т.е. полет вместе с Землей.",
+  "source": "\"Ровесник\", 2005, N 9.",
+  "author": "Ольга Неумывакина (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 2,
+  "question": "Как ни странно, но в дневнике Людовика XVI за 1789 г. под этой датой стоит запись \"Ничего\", т.е. ничего значительного в этот день, по мнению короля, не произошло. Назовите эту дату.",
+  "answer": "14 июля.",
+  "acceptable": "",
+  "comment": "День взятия Бастилии.",
+  "source": "\"Харьковские ОКНА\", 19.08.04 г.",
+  "author": "Дмитрий Башук (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 3,
+  "question": "Первую половину народной приметы острословы продолжили так: \"... то, скорее всего, они просто залетели под кровать\". Озвучьте первую половину приметы.",
+  "answer": "\"Если птицы летают низко...\".",
+  "acceptable": "",
+  "comment": "",
+  "source": "\"MAXIM\", 2005, N 9.",
+  "author": "Ольга Неумывакина (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 4,
+  "question": "Многие скульптурные композиции Петродворца являются своеобразными аллегориями событий XVIII века. Например, Самсон, раздирающий пасть льву, олицетворяет победу России над Швецией. Фонтан \"Персей\" изображает древнегреческого героя, держащего в руке голову Медузы, которая имеет явное портретное сходство с лицом... Кого?",
+  "answer": "Карла XII.",
+  "acceptable": "",
+  "comment": "А Персей, естественно, символизирует Петра I.",
+  "source": "Петродворец. — М.: Вече, 2003. — С. 77.",
+  "author": "Дмитрий Башук (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 5,
+  "question": "Оно обладает свойством повышать артериальное давление. Его настой обладает антисептическими свойствами. Оно используется в стоматологии уже 27 веков. Оно может вызывать аллергии, дерматиты, пиелонефриты. А однажды оно вызвало целую эпидемию... Какой \"болезни\"?",
+  "answer": "\"Золотой лихорадки\".",
+  "acceptable": "",
+  "comment": "Это всё о золоте.",
+  "source": "\"Cosmopolitan\" в Украине\", 2005, N 10.",
+  "author": "Галина Островерхова (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 6,
+  "question": "Генри Форд в одной из своих книг пишет: \"Деловые люди думали тогда, что с предприятием можно делать все что угодно, если его профинансировать\". А что, согласно этому рецепту, нужно сделать, если с первого раза это не удалось?",
+  "answer": "Снова финансировать.",
+  "acceptable": "",
+  "comment": "",
+  "source": "Г. Форд. Моя жизнь. Мои достижения. — Киев: Грайлык, 1993. — С. 40.",
+  "author": "Александр Лисянский (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 7,
+  "question": "Закончите высказывание Ярослава Гашека: \"Скромность украшает мужчину, но настоящий мужчина...\".",
+  "answer": "\"... украшений не носит\".",
+  "acceptable": "По смыслу.",
+  "comment": "",
+  "source": "\"MAXIM\", 2005, N 10.",
+  "author": "Ольга Неумывакина (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 8,
+  "question": "В одном из писем, относящихся к последним годам жизни, Марк Твен сообщал, что к нему приехала, чтобы повидаться с ним, его первая любовь. Звали ее Лаура Хокинс. Вероятно, когда-то это было \"прелестное голубоглазое существо с золотистыми волосами\". Сохранилась фотография, запечатлевшая эту встречу двух пожилых людей. Наверное, ее можно было подписать просто: \"Марк Твен и Лаура Хокинс\". Но под ней другая трогательная подпись. Какая именно?",
+  "answer": "\"Том Сойер и Бекки Тетчер\".",
+  "acceptable": "",
+  "comment": "Лаура была прототипом Бекки Тетчер, а Марк Твен, естественно, — Тома Сойера.",
+  "source": "Р. Белоусов. Тайны великих книг. — М.: РИПОЛ КЛАССИК, 2004. — С. 389.",
+  "author": "Татьяна Лещенко (Харьков)",
+  "tournament": "Школьный турнир по игре «Что? Где? Когда?» (Таллин)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 9,
+  "question": "Все вы привыкли к обратному отсчёту после окончания минуты обсуждения от 10 до 0, после которого ответ у вас скорее всего не возьмут. А вот команда КВН \"Три толстяка\" утверждала, что слова \"10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0\" являются кратким содержанием известного романа. Назовите автора этого романа?",
+  "answer": "Агата Кристи (\"10 негритят\")",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Денис Гончар (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 10,
+  "question": "Одежда египетских женщин периода Древнего Царства — калазирис — состояла из куска материи, обертывавшего фигуру от щиколоток до груди на бретелях и была по форме одинаковой и для царицы, и для рабыни. И все же сословное различие в одежде было. В чем оно выражалось?",
+  "answer": "В качестве ткани.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Борис Левин (Горловка)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 11,
+  "question": "Закончите стихи Феликса Кривина:\nБашмак храбрился: \"Что нам слякоть,\nИ грязь, и ливень, и пороша!\"\nНо только с неба стало капать —\nОн моментально...",
+  "answer": "Сел в калошу.",
+  "acceptable": "",
+  "comment": "",
+  "source": "Феликс Кривин \"Полусказки\", Ужгород, \"Карпаты\" 1964 год, стр.145.",
+  "author": "Вячеслав Санников (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 12,
+  "question": "Осаждавшие нередко получали это от гарнизонов сдавшихся крепостей. Было это и у Брестской крепости, чисто символическое и весившее 3,5 кг, но немцам, несмотря на то, что они захватили крепость, так и не доставшееся. В итоге, уже после войны, это нашли при раскопках в крепостных руинах. Что же это?",
+  "answer": "Ключ от крепости.",
+  "acceptable": "",
+  "comment": "",
+  "source": "Путеводитель \"Музей обороны Брестской крепости\", Минск, \"Беларусь\" 1980 год, стр.10.",
+  "author": "Вячеслав Санников (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 13,
+  "question": "В свое время была написана пародийная критическая статья, посвященная двум произведениям русской литературы. Согласно этой пародии, в первом произведении одна из героинь предстает в образе вредителя и мота. Во втором же произведении это передовая и прогрессивная героиня являющаяся собирательным образом незаметных, но необходимых. Вспомнив, какое действие, вызвавшее печаль, совершила эта героиня в первом произведении, и какое действие помогла совершить во втором, назовите оба произведения.",
+  "answer": "\"Курочка-Ряба\", \"Репка\". (Речь шла о мышке).",
+  "acceptable": "",
+  "comment": "",
+  "source": "Д. Розенталь. И. Голуб. Н. Кохтеев. Русский язык для школьников пятых-девятых классов. Путешествие в страну слов. Москва. \"Дрофа\". 1995. с.39.",
+  "author": "Анна Врублевская (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 14,
+  "question": "Среди русских свадебных обычаев был и такой, ставить по углам комнаты для новобрачных сосуды. А что в них находилось?",
+  "answer": "Мед.",
+  "acceptable": "",
+  "comment": "",
+  "source": "К. Валишевский, \"Иван Грозный\", Москва, \"ИКПА\", 1989 год, стр. 120.",
+  "author": "Вячеслав Санников (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 15,
+  "question": "В одной сказке жителям страны Недоладии под страхом смерти запрещалось доводить любое дело до конца. Даже король не был исключением. Назовите род занятий подданного этой страны, которому, по его словам, единственному из всех, можно было нарушать это правило.",
+  "answer": "Палач.",
+  "acceptable": "",
+  "comment": "",
+  "source": "Г.Малик \"Незвичайнi пригоди Алi у країнi Недоладiї\", К., Веселка, 1990, стр.65",
+  "author": "Олег Пелипейченко (Харьков)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 16,
+  "question": "Юрий Никулин утверждал, что сценарий этого фильма был написан специально для него, о чём может свидетельствовать имя персонажа, которого он должен был сыграть. Также он признавался, что перед съёмками даже записался на специальные курсы. Но сняться не удалось из-за гастролей. О какой роли идёт речь?",
+  "answer": "Юрия Деточкина (\"Берегись автомобиля!\")",
+  "acceptable": "",
+  "comment": "",
+  "source": "\"Собеседник\" N18 за 2001 год стр.20",
+  "author": "Денис Гончар (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 17,
+  "question": "Илья Эренбург писал: \"За шесть миллионов говорит один голос — не мудреца, не поэта (...). Шесть миллионов ни в чем не повинных людей погибли. Один чистый, детский голос живет: он оказался сильнее смерти.\" Чей этот детский голос?",
+  "answer": "Анны Франк.",
+  "acceptable": "",
+  "comment": "",
+  "source": "Рассылка CityCat Сб, 01 сен 2001 Неизвестные факты из жизни известных людей АННА ФРАНК",
+  "author": "Алексей Баев (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 18,
+  "question": "Уважаемые знатоки, послушайте, пожалуйста, диалог из романа Сологуба \"Мелкий бес\": \"раздосадованный Рутилов сказал:\n— Ты, Ардальон Борисыч... форменная свинья.\n— Врешь — угрюмо сказал Передонов.\n— Не, не вру, и могу доказать, — злорадно сказал Рутилов\". После этого Рутилов попросил Передонова одолжить ему некую сумму денег. Какую именно?",
+  "answer": "5 копеек. (Пятачок).",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Наталья Кокоз-младшая (Симферополь)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 19,
+  "question": "В 19 веке русским врачом Донбергом были выпущены \"Таблицы по метрической системе для определения...\" Чего?",
+  "answer": "Остроты зрения.",
+  "acceptable": "",
+  "comment": "",
+  "source": "CD-ROM \"Энциклопедический словарь Брокгауза и Ефрона\". \"Биографии\", \"Россия\", диск 1, Раздел \"Биографии\", статья \"Донберг Герман Андреевич\", стр.1.",
+  "author": "Вячеслав Санников (Одесса)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 20,
+  "question": "Известно, что коньки появились на Руси достаточно давно. Вспомним, хотя бы, Петра I. Но, еще в 1895 году, словарь Брокгауза и Ефрона предупреждал своих читателей: \"С коньками не следует путать...\" Что?",
+  "answer": "Лыжи.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Борис Левин (Горловка)",
+  "tournament": "II Всеукраинский синхронный школьный турнир (1 этап)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 21,
+  "question": "Треуголка произошла в XVI веке от военной шляпы у которой загнули поля. Какая военная необходимость была тому причиной?",
+  "answer": "Поля мешали стрельбе из огнестрельного оружия.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 22,
+  "question": "Корова и кресло, курица и циркуль, штатив и рояль. Что общего у каждой пары?",
+  "answer": "Количество ног.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 23,
+  "question": "Человек более чем на 75 % состоит из воды. Кровь состоит из воды на 90 %. А что в человеческом организме самое сухое?",
+  "answer": "Зубная эмаль.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 24,
+  "question": "Говорят, что перед неблизким путешествием с некой компанией Эзоп взял на себя самую большую корзину. И не прогадал. Что в ней было?",
+  "answer": "Еда на дорогу.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 25,
+  "question": "На какое предложение римского сената император Тиберий ответил: \"А что вы будете делать, если у вас будет 13 цезарей?\"",
+  "answer": "На предложение назвать в его честь месяц.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 26,
+  "question": "В 1893 году механик Генри Аронс изобрел то, без чего немыслимы современные джинсы. Что?",
+  "answer": "Застежку-молнию.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 27,
+  "question": "Швейцарец Жан-Жак Бабель подсчитал, что с 3500 года до н.э. человечество провело всего лишь 292 года без... Чего?",
+  "answer": "Без войн.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Евгений Копейка",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 28,
+  "question": "Суто, Юго-Восточная Африка: \"Неизведанная даль беспокоит сердце, а знакомые окрестности — только ...\" Что?",
+  "answer": "Ноги.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Евгений Копейка",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 29,
+  "question": "Ранние эпитафии древних греков предназначались для кенотафов. Надпись на одном из них гласила: \"Двения это гробница. Погублен он морем бесстыдным\". А чем кенотаф отличался от обычной гробницы?",
+  "answer": "Он пустой — остатки недоступны для погребения или же человек был погребен вне родины.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Евгений Копейка",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 30,
+  "question": "В древней исландской саге есть такой эпизод: злая мачеха заставила двух своих падчериц зимой стирать белье на морском берегу. Дул пронзительный ветер и девушки в одних полотняных рубашонках дрожали от холода. Мимо проезжали славные рыцари Гарвиг и Ортвич, которые протянули девушкам свои плащи. Но благородные сестры наотрез отказались надеть плащи. Почему?",
+  "answer": "Плащи были мужские.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Евгений Копейка",
+  "tournament": "Школьный турнир «Что? Где? Когда?» (вариация вопросов)",
+  "difficulty": "easy"
+ },
+ {
+  "id": 31,
+  "question": "По старой китайской традиции, во время беседы младший должен просмотреть в глаза старшего дважды. Когда?",
+  "answer": "В момент прихода и прощаясь.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Всеволод Постный (Краснодар), Евгений Копейка (Одесса)",
+  "tournament": "Школьный турнир «Брэйн-ринг»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 32,
+  "question": "На выбранном для строительства плотины месте, инженеры из Висконсина обнаружили остатки плотины, построенной в 870 году до нашей эры. Кому понадобилась плотина в столь давние времена?",
+  "answer": "Бобрам.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Всеволод Постный (Краснодар), Евгений Копейка (Одесса)",
+  "tournament": "Школьный турнир «Брэйн-ринг»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 33,
+  "question": "В 1976 году швед Бьерн Бранд поставил мировой рекорд — более 271 часа говорил без передышки, едва не побив попутно и другой рекорд в 288 часов. Какой?",
+  "answer": "Рекорд непрерывного бодрствования.",
+  "acceptable": "",
+  "comment": "",
+  "source": "Наука & Жизнь, N 4, 1977. с.159.",
+  "author": "Всеволод Постный (Краснодар), Евгений Копейка (Одесса)",
+  "tournament": "Школьный турнир «Брэйн-ринг»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 34,
+  "question": "Самый популярный способ транспортировки людей в мире?",
+  "answer": "Пешком.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Всеволод Постный (Краснодар), Евгений Копейка (Одесса)",
+  "tournament": "Школьный турнир «Брэйн-ринг»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 35,
+  "question": "Малайская игра \"Сепаг рага\" — игра для одинокого футболиста, для нее нужен мяч, но не нужно поле и ворота. Как в нее играют?",
+  "answer": "Подобно нашему набиванию мяча ногами и др. частями тела.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "Всеволод Постный (Краснодар), Евгений Копейка (Одесса)",
+  "tournament": "Школьный турнир «Брэйн-ринг»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 36,
+  "question": "Герои сказочной повести Виталия Губарева долго ищут на карте государство Ликия. Что мы пропустили в названии государства?",
+  "answer": "Кар",
+  "acceptable": "",
+  "comment": "Вымышленное государство Карликия столь мало, что его трудно найти на географической карте.",
+  "source": "https://books.rusf.ru/unzip/add-on/xussr_gk/gubarw01.htm?1/9",
+  "author": "Григорий Зырянов",
+  "tournament": "IX открытый школьный фестиваль по интеллектуальным играм «Интеллектуальный воронёнок»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 37,
+  "question": "Раздаточный материал: hELLO / ISEELEgS\n\nАнглоязычные школьники тоже иногда скучают на уроках. Ответьте, при помощи ЧЕГО были созданы надписи с раздаточного материала?",
+  "answer": "Калькулятор",
+  "acceptable": "",
+  "comment": "Слова можно набрать на калькуляторе при помощи цифр.",
+  "source": "ЛОАВ; https://t.me/knigsovet/7576",
+  "author": "Сергей Никольский (Москва — Барселона)",
+  "tournament": "IX открытый школьный фестиваль по интеллектуальным играм «Интеллектуальный воронёнок»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 38,
+  "question": "Над античной мозаикой, которая выставлена в одном из археологических музеев Туниса, установлено зеркало. На самой мозаике можно увидеть ЕЁ. Назовите ЕЁ.",
+  "answer": "Медуза Горгона",
+  "acceptable": "По любому из двух слов, без неверных уточнений.",
+  "comment": "Мозаика на полу; зеркало помогает рассмотреть экспонат и отсылает к мифологическому сюжету.",
+  "source": "https://tinyurl.com/4kht8u6b; https://t.me/blindfatmeft/1429",
+  "author": "Сергей Никольский (Москва — Барселона)",
+  "tournament": "IX открытый школьный фестиваль по интеллектуальным играм «Интеллектуальный воронёнок»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 39,
+  "question": "Густав Климт был холост, но жил не один. Неудивительно, что на одной из картин Климта исследователи разглядели отпечаток АЛЬФЫ. Ответьте двумя словами, которые начинаются на соседние буквы, что мы заменили словом АЛЬФА?",
+  "answer": "Кошачья лапа",
+  "acceptable": "Лапа кошки.",
+  "comment": "Климт жил с мамой и множеством кошек. Современники отмечали, что животные ходили по его холстам во время работы.",
+  "source": "https://www.kommersant.ru/doc/4910024",
+  "author": "Сергей Никольский (Москва — Барселона)",
+  "tournament": "IX открытый школьный фестиваль по интеллектуальным играм «Интеллектуальный воронёнок»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 40,
+  "question": "Персонажи повести Юрия Коваля сбегают из здания зверофермы на природу и успешно спасаются от охотника. Вскоре они впервые в жизни видят другого охотника. Назовите имя этого охотника.",
+  "answer": "Орион",
+  "acceptable": "",
+  "comment": "Герои — песцы, сбежавшие с пушной зверофермы. Спасаясь от охотника, они выбегают ночью и впервые видят звёздное небо. Орион — мифический охотник, ставший созвездием.",
+  "source": "Ю. Коваль «Недопёсок Наполеон Третий»",
+  "author": "Григорий Зырянов",
+  "tournament": "IX открытый школьный фестиваль по интеллектуальным играм «Интеллектуальный воронёнок»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 41,
+  "question": "Директор зверофермы из повести Юрия Коваля гонится за беглецами и очень сердится, когда слышит ИКС. Другой ИКС был дописан в октябре. Какое слово мы заменили на ИКС?",
+  "answer": "Выстрел",
+  "acceptable": "",
+  "comment": "Директор не хотел, чтобы ценные песцы пострадали при поимке. Второй случай — повесть из цикла Пушкина, написанная в Болдинскую осень.",
+  "source": "Ю. Коваль «Недопёсок Наполеон Третий»; https://ru.wikipedia.org/wiki/Выстрел_(повесть)",
+  "author": "Григорий Зырянов",
+  "tournament": "IX открытый школьный фестиваль по интеллектуальным играм «Интеллектуальный воронёнок»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 42,
+  "question": "Гориллы, как правило, не смотрят на других представителей своего вида, так как это считается угрозой. СусАна МонсО предполагает, что именно по этой причине гориллы, в отличие от шимпанзе, в основном не справляются… С чем?",
+  "answer": "С зеркальным тестом.",
+  "acceptable": "С узнаванием себя в зеркале и другие синонимичные ответы.",
+  "comment": "Шимпанзе поначалу не узнают себя в зеркале, но потом привыкают к своему отражению. Сусана Монсо пишет, что у горилл такого не происходит, потому что гориллы не хотят столкнуться с угрозой в свой адрес, поэтому они избегают своего отражения. Правда, недавно начали появляться данные, что некоторые гориллы все же справились с зеркальным тестом. Возможно, это связано с тем, что они чаще взаимодействовали с людьми, чем с другими гориллами.",
+  "source": "",
+  "author": "Александр Карясов (Амстердам)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 43,
+  "question": "В этом вопросе словом ОНИ заменено несколько слов. Один авангардист вместо традиционных ИХ использовал более вычурные, например, «вопросительно» или «завидуя товарищу с большой головой». На каком языке ИХ обычно можно встретить?",
+  "answer": "На итальянском.",
+  "acceptable": "",
+  "comment": "ОНИ — это обозначения для исполнения музыки. Чтобы помочь музыкантам понять, как исполнять тот или иной музыкальный отрывок, композиторы указывают слова вроде andante или allegro. Композитор-авангардист ЭрИк СатИ, по всей видимости, не больно-то и хотел помогать музыкантам разобраться в своей музыке, зато хотел поразвлекаться, что тоже очень уважаемо.",
+  "source": "",
+  "author": "Александр Карясов (Амстердам)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 44,
+  "question": "Родители ХЕльмута Ньютона были обеспеченными. Ньютон вспоминал, как мама поворачивала ЕГО, если хотела побольнее наказать. Назовите ЕГО одним словом.",
+  "answer": "Кольцо.",
+  "acceptable": "Перстень.",
+  "comment": "Мама Хельмута носила кольцо с большим бриллиантом и, если хотела, чтобы подзатыльник был более запоминающимся, поворачивала кольцо бриллиантом внутрь.",
+  "source": "",
+  "author": "Владимир Сушков (Саранск)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 45,
+  "question": "Футболиста ЛУиса СуАреса часто обвиняли в симуляции. Забавно, что у Суареса есть дочь по имени ОНА. По одной из версий, в честь другой ЕЁ получил название древний город. Назовите ЕЁ.",
+  "answer": "ДельфИна.",
+  "acceptable": "",
+  "comment": "Симуляции также называют «нырками», а самих симулирующих называют «дельфинами». Совпадение это или нет, но дочь Луиса Суареса зовут Дельфина. Согласно одной версии, Дельфы названы в честь драконихи Дельфины, которую убил Аполлон.",
+  "source": "",
+  "author": "Александр Карясов (Амстердам)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 46,
+  "question": "В 2022 году на одном канале транслировали эпизод сериала. В этом эпизоде героиня во время диалога попросила сделать паузу. По совпадению, в этот момент канал сообщил… Ответьте точно: о чём?",
+  "answer": "О смерти Елизаветы Второй.",
+  "acceptable": "",
+  "comment": "По протоколу, когда королева или король Великобритании умирает, все телеканалы и радиостанции должно немедленно об этом сообщить. По невероятному совпадению, в случае с телеканалом BBC 4 это произошло прямо на фразе одной из героинь «hold on» — «подожди».",
+  "source": "",
+  "author": "Александр Карясов (Амстердам)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 47,
+  "question": "Тим РЕйборн пишет, что в момент происшествия ЕГО не было в городе. Рейборн рассказывает, что ОН поспешил обратно в город и участвовал в спасении людей, а после издал новые законы, чтобы подобные ситуации больше не повторялись. Назовите ЕГО имя.",
+  "answer": "Нерон [Клавдий Цезарь Август ГермАник].",
+  "acceptable": "Луций [ДомИций АгенобАрб].",
+  "comment": "Считается, что Нерон поджёг Рим. Полемизируя с этим, Рейборн ссылается на свидетельства людей, которые утверждали, что Нерон, которого не было в тот момент в Риме, был поражён известием о пожаре, и устремился в город, чтобы помочь пострадавшим.",
+  "source": "",
+  "author": "Александр Карясов (Амстердам)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 48,
+  "question": "Один француз проводил много времени на природе близ Неаполя и получил от наблюдавших за этим местных жителей прозвище «идиот из ПозиллИпо». Дело в том, что этот француз пользовался ИМ. В продолжении серии мультфильмов известный персонаж вместо НЕГО использует телефон. Ответьте одним словом: что такое ОНО?",
+  "answer": "Фоторужье.",
+  "acceptable": "",
+  "comment": "Речь о натуралисте ЭтьЕне-ЖЮле МарЕ, который много времени проводил с фоторужьем, чтобы снимать птиц. Местные жители не знали об изобретении, поэтому прозвали человека, который каждый день целится из ружья, но не делает ни одного выстрела, «идиотом». Во втором случае речь о Шарике, который в продолжении серии мультфильмов о Простоквашино заменил фоторужье обычным смартфоном.",
+  "source": "",
+  "author": "Владимир Сушков (Саранск)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 49,
+  "question": "Любивший выделиться ЭрИк СатИ вместо ПЕРВОЙ использовал ВТОРУЮ. ПЕРВУЮ и ВТОРУЮ можно увидеть на продукции компании, основанной в 1968 году. Назовите эту компанию.",
+  "answer": "Calvin Klein.",
+  "acceptable": "",
+  "comment": "Сати некоторое время писал своё имя как Erik, с «k» на конце, хотя имя обычно во французском языке пишется с «c». Буквы «cK» можно увидеть на продукции компании Calvin Klein.",
+  "source": "",
+  "author": "Владимир Сушков (Саранск)",
+  "tournament": "VII Открытый студенческий фестиваль интеллектуальных игр «Вышкафест»",
+  "difficulty": "easy"
+ },
+ {
+  "id": 50,
+  "question": "Один нью-йоркский ОН внимательно слушает своих клиентов и иногда просит их оставить контактные данные. С помощью этих данных ОН организовал своё дело — агентство для свиданий. Ответьте названием фильма, кто такой ОН.",
+  "answer": "таксист.",
+  "acceptable": "точный ответ.",
+  "comment": "Ахмед Ибрагим, известный под прозвищем «Купидон», организовывает для своих пассажиров свидания.",
+  "source": "https://ru.wikipedia.org/wiki/Ибрагим,_Ахмед; https://ru.wikipedia.org/wiki/Таксист_(фильм,_1976)",
+  "author": "Денис Рыбачук.",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 51,
+  "question": "Логотип одного американского музея Библии похож на раскрытую книгу и представляет собой повёрнутую ЕЁ. Что такое ОНА?",
+  "answer": "буква В [би].",
+  "acceptable": "В.",
+  "comment": "в логотипе можно увидеть первую букву слова музей — museum, а, если чуть повернуть голову, первую букву слова Библия — Bible.",
+  "source": "https://en.wikipedia.org/wiki/Museum_of_the_Bible",
+  "author": "Алексей Полевой.",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 52,
+  "question": "Словами СДЕЛАТЬ ЭТО мы заменили несколько слов. По североамериканской легенде, когда-то ворон был разноцветным. Но на Землю опустился холод, и ворону пришлось отправиться в далекое путешествие, чтобы СДЕЛАТЬ ЭТО. На обратном пути ворон почернел. Как звали того, кто СДЕЛАЛ ЭТО по другой легенде?",
+  "answer": "Прометей.",
+  "acceptable": "Матаришван.",
+  "comment": "ворон взял огонь у богов, но пока нес его в клюве, почернел от сажи.",
+  "source": "Духовны Д. Мисс Подземка; https://ru.wikipedia.org/wiki/Прометей; https://ru.wikipedia.org/wiki/Матаришван",
+  "author": "Алексей Полевой.",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 53,
+  "question": "В одном рассказе проповедники говорят, что индейцы вновь представляют опасность. Этот рассказ называется «ОНО». Что такое ОНО?",
+  "answer": "казино.",
+  "acceptable": "индейское казино.",
+  "comment": "в 1988 году был принят закон, согласно которому индейцы получили право строить в резервациях казино.",
+  "source": "Гришэм Дж. Казино",
+  "author": "Денис Рыбачук.",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 54,
+  "question": "Известный человек призывает быть реалистичными и шутит, что когда-то ему нужна была Вселенная, потом Америка, а сейчас устраивает Бруклин. Какое слово мы три раза пропустили?",
+  "answer": "мисс.",
+  "acceptable": "точный ответ.",
+  "comment": "постепенно у американского таксиста Ахмеда Ибрагима, известного как «Купидон», понижалась планка требований ко второй половине.",
+  "source": "https://ru.wikipedia.org/wiki/Ибрагим,_Ахмед",
+  "author": "Денис Рыбачук.",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 55,
+  "question": "В 1796 году Этьен-Гаспар Робер предложил устройство, которое должно было помочь Франции отразить нападение Британии. Напишите имя того, в чью честь устройство было названо.",
+  "answer": "Архимед.",
+  "acceptable": "точный ответ.",
+  "comment": "Робера предложил использовать «зеркало Архимеда», ведь Архимед, по легенде, отраженным и сфокусированным светом поджег флот.",
+  "source": "https://en.wikipedia.org/wiki/Étienne-Gaspard_Robert",
+  "author": "Родион Полевой.",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 56,
+  "question": "Раздаточный материал: вилы — forks. Какой неофициальный праздник Музей английской сельской жизни отметил, опубликовав в своих соцсетях фото стенда с вилами?",
+  "answer": "4 мая.",
+  "acceptable": "День «Звездных войн», Star Wars day.",
+  "comment": "подпись под фото гласила \"May the forks be with you\", то есть «Да прибудут с вами вилы», намек на знаменитую фразу из вселенной «Звездных войн» — «Да пребудет с тобой сила». 4 мая отмечается неофициальный день «Звездных войн» из‑за созвучия на английском «May the fourth» и «May the force».",
+  "source": "https://twitter.com/TheMERL/status/1654200894961995800",
+  "author": "Станислав Мереминский (Таллинн)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 3",
+  "difficulty": "medium"
+ },
+ {
+  "id": 57,
+  "question": "Название карибского вулканического острова Не́вис происходит от испанского слова, означающего «снег». Однако снега там почти никогда не бывает. По-видимому, название дали испанские моряки, издалека заметившие частое на Не́висе природное явление. Какое?",
+  "answer": "облака у вершины горы.",
+  "acceptable": "облака на горе, туча на горе, туман на горе, облака у вершины, тучи на вершине, туман на вершине, облака на вулкане, тучи на вулкане, туман на вулкане.",
+  "comment": "издалека покрытую облаками вершину горы легко принять за заснеженную.",
+  "source": "https://press.fourseasons.com/nevis/trending-now/fun-facts/",
+  "author": "Станислав Мереминский (Таллинн)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 3",
+  "difficulty": "medium"
+ },
+ {
+  "id": 58,
+  "question": "Согласно шутке, близким нобелевского лауреата по медицине Ту Юю́ сложно ДЕЛАТЬ ЭТО. Впервые ЭТО СДЕЛАЛИ в конце XIX века в одном из детских садов штата Кентукки. Что такое ДЕЛАТЬ ЭТО?",
+  "answer": "петь Happy Birthday [to you].",
+  "acceptable": "петь «С днем рождения тебя».",
+  "comment": "имя и фамилия китайской ученой звучат почти так же, как часть строки из англоязычной песенки-поздравления, что может вызвать комический эффект.",
+  "source": "https://cheezburger.com/9117081856/happy-birthday-to-tu-youyou; https://en.wikipedia.org/wiki/Happy_Birthday_to_You",
+  "author": "Станислав Мереминский (Таллинн)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 3",
+  "difficulty": "medium"
+ },
+ {
+  "id": 59,
+  "question": "В 2014 году индийский телеканал уволил диктора из‑за ошибки, связанной с фамилией лидера соседней страны. Слово, которым назвали лидера, стало прозвищем героини известного сериала. Напишите это слово.",
+  "answer": "одиннадцать.",
+  "acceptable": "xi, 11.",
+  "comment": "диктор принял имя Си Цзиньпина в английском написании с римским числом XI. Герои сериала «Очень странные дела» не знали имени встреченной ими девочки и стали называть ее Eleven, или Одиннадцать, из‑за татуировки с этим числом.",
+  "source": "https://www.bbc.com/news/world-asia-india-29274792; https://en.wikipedia.org/wiki/Eleven_(Stranger_Things)",
+  "author": "Станислав Мереминский (Таллинн)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 3",
+  "difficulty": "medium"
+ },
+ {
+  "id": 60,
+  "question": "В 1795 году число ВТОРЫХ тоже увеличили до 15, но вскоре стало ясно, что при дальнейшем расширении возникнут сложности. Поэтому вскоре вернулись к первоначальному варианту. Назовите ВТОРЫЕ, использовав аббревиатуру.",
+  "answer": "полосы на флаге США.",
+  "acceptable": "[красно-белые] полоски на флаге США.",
+  "comment": "когда к первоначальным 13 штатам добавились Вермо́нт и Кенту́кки, дизайн флага США изменили, увеличив количество и звезд, и полос. Однако по мере рост числа штатов стало ясно, что флаг с большим числом полос станет непропорциональным и сложным в исполнении. Поэтому в 1818 г. было принято решение по мере образования новых штатов менять только число звезд, а полос сделать снова 13, по числу первоначальных штатов. Неофициальное название флага США — Stars and Stripes, Звезды и Полосы.",
+  "source": "https://www.crwflags.com/fotw/flags/us-1795.html",
+  "author": "Станислав Мереминский (Таллинн)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 3",
+  "difficulty": "medium"
+ },
+ {
+  "id": 61,
+  "question": "Представители одного семейства по-шведски называется словом läderlapp (ля́дерлапп), буквально означающим «клочок кожи». Кого в Швеции, в отличие от почти всего остального мира, до 1990‑х годов называли Läderlappen (ля́дерлаппен)?",
+  "answer": "Бэтмен.",
+  "acceptable": "Бетмен, Batman.",
+  "comment": "этим словом по-шведски называются гладконосые летучие мыши, или кожа́новые. Для знаменитого героя комиксов шведские переводчики поначалу придумали собственный вариант имени, но в конце концов приняли международный вариант — Бэтмен.",
+  "source": "https://sv.wikipedia.org/wiki/Batman",
+  "author": "Станислав Мереминский (Таллинн)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 3",
+  "difficulty": "medium"
+ },
+ {
+  "id": 62,
+  "question": "Дзикаку-Дайси в девятом веке совершил паломничество на запад. Историк отмечает, что его путевые заметки для соотечественников имели не меньшее значение, чем для европейцев созданное несколько веков спустя сочинение другого человека. Назовите этого другого человека.",
+  "answer": "Марко Поло",
+  "acceptable": "Поло",
+  "comment": "монах, также известный как Эннин, путешествовал из Японии в Танский Китай как центр буддийской культуры той эпохи, его дневник является важным источником по культуре Китая девятого века. Через четыре века Марко Поло выпустил своё описание путешествия в Китай, даже менее точное в деталях.",
+  "source": "В. Елисеефф, Д. Елисеефф. Японская цивилизация. С. 61; https://en.wikipedia.org/wiki/Ennin's_Diary; https://en.wikipedia.org/wiki/Ennin",
+  "author": "Игорь Лаптев (Ростов-на-Дону)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 5",
+  "difficulty": "medium"
+ },
+ {
+  "id": 63,
+  "question": "В середине 1990-х Сусуму Хирасава записал альбом, в котором представил Бангкок футуристическим и ненастоящим. Англоязычное название этого альбома обыгрывает старое название Таиланда, а кроме того на слух совпадает с названием произведения, появившегося на несколько лет раньше. Напишите это название.",
+  "answer": "Sim City",
+  "acceptable": "SimCity",
+  "comment": "музыкант хотел представить версию будущего города как симуляцию, к тому же замечая созвучие слов Sim [сим] и Siam [сиам]. Первый градостроительный симулятор Уилла Райта из серии SimCity [сим сити] (без пробела) появился в 1989, а альбом Хирасавы (с пробелом) издан в 1995.",
+  "source": "https://en.wikipedia.org/wiki/Sim_City_(album); https://en.wikipedia.org/wiki/SimCity_(1989_video_game)",
+  "author": "Андрей Скиренко (Ростов-на-Дону)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 5",
+  "difficulty": "medium"
+ },
+ {
+  "id": 64,
+  "question": "В 2014 году во время очень сильной засухи власти Калифорнии спасали молодых ИХ, спуская в автоцистернах. Ответьте одним словом: кто ОНИ?",
+  "answer": "лососи",
+  "acceptable": "чавычи; в любой форме",
+  "comment": "лососи живут в море, а нерестятся в реках. Родители в реки попасть смогли, а вот молодняку добраться до океана было тяжело, настолько упал уровень воды. Поэтому власти штата отлавливали лососей в горных реках и отвозили их пониже, чтобы выправить экологический баланс.",
+  "source": "С. Барнетт. Занимательное дождеведение: дождь в истории, науке и искусстве. С. 299; M. B. Marois. California Drought Has Salmon Hitching Rides in Trucks; Coleman National Fish Hatchery",
+  "author": "Андрей Скиренко (Ростов-на-Дону)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 5",
+  "difficulty": "medium"
+ },
+ {
+  "id": 65,
+  "question": "В одном романе новая учительница показывает первоклассникам буквы и спрашивает, что это такое. В описании причины того, почему дети бедняков уже знали ответ, говорится, что большинство из них были… кем именно?",
+  "answer": "второгодниками",
+  "acceptable": "оставшимися на второй год, не переведёнными во второй класс",
+  "comment": "дети из романа «Убить пересмешника» в США в годы Великой депрессии учились плохо, часто пропускали, потому что надо было помогать семье, и потому оставались на второй год, но уж буквы в лицо узнать могли. А только пришедшей в школу новой учительнице это было неизвестно.",
+  "source": "Х. Ли. Убить пересмешника; H. Lee. To kill a Mockingbird",
+  "author": "Андрей Скиренко (Ростов-на-Дону)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 5",
+  "difficulty": "medium"
+ },
+ {
+  "id": 66,
+  "question": "Фред Ван Ленте рассказывает о жестокой конкуренции между издателями в эпоху популярности криминальных комиксов и приводит легенду, что как-то раз у одного из издателей закончилось нечто. Ответьте точно: что именно закончилось?",
+  "answer": "красные чернила",
+  "acceptable": "чернила красного цвета, красные краски, красная краска",
+  "comment": "жестокая конкуренция вынуждала соревноваться и в жестокости самих изображений — кто рисовал больше кровавых сцен, тот и надеялся привлечь больше читателей. Примечательно, что иллюстрация в книге Ван Ленте «История комиксов», пародийным образом изображающая этот процесс, сама по себе чёрно-белая.",
+  "source": "Ф. Ван Ленте, Р. Данлеви. История комиксов. С. 66",
+  "author": "Андрей Скиренко (Ростов-на-Дону)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 5",
+  "difficulty": "medium"
+ },
+ {
+  "id": 67,
+  "question": "Герой фильма Джузеппе Торнаторе шутит, что из-за большого количества претендентов у него может заболеть шея. Ответьте словом латинского происхождения: кем он работает?",
+  "answer": "аукционистом",
+  "acceptable": "в любой форме",
+  "comment": "приходится постоянно крутить головой влево-вправо, откликаясь на поданные участниками торгов ставки, а человек уже пожилой, шея от такой активности спасибо не скажет. Слово «аукцион» восходит к латинскому глаголу augēre [аугэрэ] — увеличивать.",
+  "source": "х/ф «Лучшее предложение» (реж. Дж. Торнаторе, 2013); ок. 8:30-8:40; https://ru.wiktionary.org/wiki/auctio",
+  "author": "Андрей Скиренко (Ростов-на-Дону)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 5",
+  "difficulty": "medium"
+ },
+ {
+  "id": 68,
+  "question": "В предисловии к одной из своих книг Мишель Фуко назвал ЭТО бесполезным двойником, диктующим свои законы всему остальному; симулякром, с которого начинается единовластие автора и провозглашается его тирания. Назовите ЭТО.",
+  "answer": "предисловие",
+  "acceptable": "",
+  "comment": "Фуко пишет, что предисловие — бесполезный симулякр, потому что дублирует то, что и так есть в книге. Оно вредно тем, что навязывает читателю мнение автора. В конце он приводит диалог с издателем о том, что написанное предисловие оказалось коротким.",
+  "source": "Мишель Фуко, предисловие к переизданию книги «История безумия в классическую эпоху»",
+  "author": "Артём Рожков (Ульяновск)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 6. Тур 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 69,
+  "question": "Общаясь в непринуждённой, неформальной обстановке, люди склонны проявлять фантазию и высказывать самые смелые идеи. Американский учёный Майкл Эндрюс подсчитал, что в XX веке несколько лет подряд число выданных патентов снизилось почти на треть. По мнению Эндрюса, причиной стал ОН. Назовите ЕГО.",
+  "answer": "сухой закон",
+  "acceptable": "запрет алкоголя [в США]",
+  "comment": "Эндрюс пишет, что учёные часто совершают важные открытия после работы, общаясь с коллегами в баре. Первую версию вопроса автор записал на обратной стороне бирдекеля.",
+  "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3489466",
+  "author": "Артём Рожков (Ульяновск)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 6. Тур 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 70,
+  "question": "В английском языке существует идиома ten and two [тэн энд ту], что переводится как «десять и два». Эту фразу говорят человеку, когда хотят, чтобы тот не отвлекался и снова взял в руки… Что именно?",
+  "answer": "руль",
+  "acceptable": "",
+  "comment": "Стандартное положение рук на руле напоминает циферблат часов со стрелками, стоящими на отметках 10 и 2.",
+  "source": "https://en.wiktionary.org/wiki/at_ten_and_two",
+  "author": "Артём Рожков (Ульяновск)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 6. Тур 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 71,
+  "question": "В тридцатые годы прошлого века один бизнесмен для удобства покупателей проложил конвейерную ленту, а другой даже построил небольшую железную дорогу, однако после изобретения ЕЁ нужда в подобных решениях отпала. Первые ОНИ занимали много места, пока изобретатель не придумал складну́ю конструкцию. Назовите ЕЁ.",
+  "answer": "тележка для супермаркета",
+  "acceptable": "тележка для покупок, магазинная тележка, продуктовая тележка, тележка",
+  "comment": "Силван Голдман объединил корзину и стул на колёсиках, а Орла Уотсон запатентовал складную телескопическую конструкцию, позволившую экономить место.",
+  "source": "https://priceonomics.com/how-a-basket-on-wheels-revolutionized-grocery/",
+  "author": "Артём Рожков (Ульяновск)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 6. Тур 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 72,
+  "question": "«Представьте, что вы хотите понять, как работает крупная корпорация, а всё, что вам позволено делать — стоять на улице у головного офиса и смотреть издали на окна. Единственное, что вы увидите — в каких комнатах зажигается свет в разные часы». Эту аналогию приводит учёный-антрополог, говоря о том, что ОНА вовсе не так технологична и совершенна, как многие полагают. Назовите ЕЁ несколькими словами или аббревиатурой.",
+  "answer": "[функциональная] магнитно-резонансная томография",
+  "acceptable": "МРТ, фМРТ, КТ, компьютерная томография",
+  "comment": "Гай Дойчер пишет, что даже совершенные МРТ-сканеры выявляют лишь увеличение кровотока, из чего можно сделать вывод об активности нейронов, но учёные не понимают, какие процессы происходят внутри мозга.",
+  "source": "Гай Дойчер, «Сквозь зеркало языка»",
+  "author": "Артём Рожков (Ульяновск)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 6. Тур 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 73,
+  "question": "Согласно одному афоризму, бросать деньги на ветер можно лишь при определённых обстоятельствах. Каким термином голландского происхождения называют противоположные обстоятельства?",
+  "answer": "фордевинд",
+  "acceptable": "бейдевинд, галфвинд, бакштаг, галс, штиль",
+  "comment": "Афоризм гласит, что бросать деньги на ветер можно лишь тогда, когда ветер дует навстречу. Парусное судно плывёт с попутным ветром (фордевинд), перпендикулярно ветру или под углом.",
+  "source": "https://ru.wikipedia.org/wiki/Курс_относительно_ветра",
+  "author": "Артём Рожков (Ульяновск)",
+  "tournament": "Открытый всеобщий синхронный чемпионат — 2023/2024. Этап 6. Тур 1",
+  "difficulty": "medium"
+ },
+ {
+  "id": 74,
+  "question": "[Ведущему: пожалуйста, не озвучивайте кавычки и заглавную букву в слове «Интеграл». При выводе на экран следует опустить кавычки и писать с прописной буквы. Сделайте, пожалуйста, паузу между словами «ПРОПУСК1» и «ПРОПУСК2»] Можно сказать, что в карьере одного человека после «Интеграла» ПРОПУСК1. Забавно, что каждое слово в «ПРОПУСК1» ПРОПУСК2. Пропуски неразличимы на слух. Заполните любой из них.",
+  "answer": "Начинается «На-на»",
+  "acceptable": "Начинается на «на», начинается «Нана»",
+  "comment": "Когнитивно деформированный автор вопроса заметил, что все слова в словосочетании «Начинается „На‑на\"» начинаются на одинаковые буквы «на». В 1989 году БАри АлибАсов прекратил существование группы «ИнтегрАл» и создал новую группу «На‑на».",
+  "source": "https://ru.wikipedia.org/wiki/Интеграл_(группа); https://ru.wikipedia.org/wiki/На-На; https://ru.wikipedia.org/wiki/Алибасов,_Бари_Каримович",
+  "author": "Антон Березанский",
+  "tournament": "Синхронный турнир «В конце ноября»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 75,
+  "question": "РаффаЭле ГуариньЕлло в 1990‑е годы расследовал дело о допинговой системе. У функционеров не было информации о том, кто выступал десятки лет назад даже в высшей лиге. В расследовании Гуариньелло опирался в том числе на... Ответьте, использовав имя собственное, на что?",
+  "answer": "альбомы Panini [ПанИни]",
+  "acceptable": "журналы Panini, карточки Panini, наклейки Panini",
+  "comment": "базы данных футбольных чиновников оказались недостаточно полными, поэтому следователь создал свою, основываясь на информации из альбомов Panini.",
+  "source": "https://www.theguardian.com/football/2003/jan/21/sport.comment; https://www.sports.ru/tribuna/blogs/kleshchonok/2482924.html",
+  "author": "Антон Березанский",
+  "tournament": "Синхронный турнир «В конце ноября»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 76,
+  "question": "В одном наборе Lego [лЕго] озадаченный детектив держит в руке в буквальном смысле ЕЁ. Кстати, сумма цифр в артикуле упомянутого набора равна 17 [семнадцати]. Назовите ЕЁ двумя словами.",
+  "answer": "красная селёдка",
+  "acceptable": "red herring, rød sild, czerwony śledź, rode haring",
+  "comment": "«красная селёдка» — это идиома, обозначающая ложную наводку. Видимо, детектив из набора как раз пошёл по неверному следу. Передаём привет Игорю КулешОву.",
+  "source": "https://vk.com/wall-59195759_15207",
+  "author": "Антон Березанский",
+  "tournament": "Синхронный турнир «В конце ноября»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 77,
+  "question": "Ульяна Нижинская пишет, что раньше из‑за верований трупам в могиле придавали схожесть с ИКСОМ. Позднее восприятие изменилось, и покойников клали будто смерть — это всего лишь ИГРЕК. Назовите ИКС и ИГРЕК словами, которые заканчиваются одинаково.",
+  "answer": "эмбрион, сон",
+  "acceptable": "в любом порядке",
+  "comment": "поза эмбриона должна была помочь человеку переродиться, а прямое трупоположение напоминало, что человек будто просто заснул. Кстати, слово «покойник» тоже отсылает к восприятию смерти как сна.",
+  "source": "Ульяна Нижинская. Недетские сказки о смерти, сексе и конце света. Смыслы известных народных текстов",
+  "author": "Антон Березанский",
+  "tournament": "Синхронный турнир «В конце ноября»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 78,
+  "question": "Взаимодействие с матерью часто определяет направление развития ребёнка. Для своего проекта художница СесИлия ЙОнссон собрала несколько образцов плацЕнты и создала основной элемент ИКСА, использовав выделенный из ИГРЕКА металл. Назовите ИКС и ИГРЕК словами, которые начинаются на парные согласные.",
+  "answer": "кОмпас, гемоглобИн",
+  "acceptable": "",
+  "comment": "через плаценту плоду передаётся кислород и питательные вещества, важную роль в этом процессе играет гемоглобин. Желая метафорически показать важность взаимодействия с ребёнком, художница выделила из содержащегося в плаценте гемоглобина железо и выковала из него стрелку для компаса.",
+  "source": "https://www.ceciliajonsson.com/4-haem",
+  "author": "Юлия Дидбаридзе",
+  "tournament": "Синхронный турнир «Что-то вроде „В конце ноября\"»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 79,
+  "question": "Чтобы справиться со стрессом, БрЭдли Харт стал создавать пуантилистИческие картины, используя шприцы с краской, а в качестве холста — ЕЁ. С НЕЙ сам Харт сравнил человечество во время пандемии, когда каждый оказался изолирован в отдельном маленьком пространстве. Назовите ЕЁ.",
+  "answer": "воздушно-пузырчатая плёнка",
+  "acceptable": "по словам пузырчатая/пупырчатая + плёнка/упаковка, пупырка",
+  "comment": "узнав, что у него рассеянный склероз, Харт прибег к проверенному методу снятия стресса — пузырчатой плёнке, только стал не лопать пузырьки, а заполнять их краской, кропотливо создавая огромные полотна. В пандемию каждый человек оказался в своём небольшом пузырьке, и мир словно бы стал большой пупырчатой плёнкой.",
+  "source": "https://www.bradleyhart.ca/; https://www.goodnewsnetwork.org/bradley-hart-bubble-wrap-art/",
+  "author": "Юлия Дидбаридзе",
+  "tournament": "Синхронный турнир «Что-то вроде „В конце ноября\"»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 80,
+  "question": "«Париж принадлежит нам» ЖАка РивЕтта снимался в самом начале новой волны и ещё в процессе производства был высоко оценён коллегами. Денег у РивЕтта едва хватило на съёмки, поэтому первые ОНИ могли удивиться, увидев, что семья идёт в кинотеатр на «Париж принадлежит нам». Назовите ИХ достаточно точно, использовав числительное.",
+  "answer": "зрители «Четыреста ударов»",
+  "acceptable": "",
+  "comment": "фильм РивЕтта был снят ещё в 1958 году, но средства на монтаж и выпуск в прокат режиссёру удалось собрать только через три года. За это время уже успел выйти фильм ТрюффО, в котором тот, отдавая дань уважение коллеге, отправляет героев в кинотеатр на фильм-призрак.",
+  "source": "https://www.criterion.com/current/posts/3963-paris-belongs-to-us-nothing-took-place-but-the-place",
+  "author": "Юлия Дидбаридзе",
+  "tournament": "Синхронный турнир «Что-то вроде „В конце ноября\"»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 81,
+  "question": "Слова ТАКИЕ ОНИ — замена. ТАнские источники связывали появление в Китае ТАКИХ ИХ с монахом СюАньцзаном, который понимал ценность привезённых им из Индии рукописей, поэтому вернулся не один. По предположению востоковеда, именно во времена СюАньцзана китайское слово для умиротворяющего чтения сутр стало также обозначать ЭТО. Назовите ЭТО.",
+  "answer": "мурлыканье [котика]",
+  "acceptable": "мяуканье, мурчание вместо мурлыканья",
+  "comment": "современные учёные также полагают, что появление в Китае домашних кошек могло быть связано с буддизмом и отчасти с необходимостью защищать рукописи от грызунов, а затем наполненное вибрациями мурлыканье котиков в народном воображении сплелось с деятельностью монахов. Не могу не заметить, что если многие буддисты стремятся попасть в чистые земли, т.е.pure land, то котики наверняка, попадают в purr land.",
+  "source": "https://www.cambridge.org/core/books/animals-through-chinese-history/walking-by-itself/93B623D3994597A7D4B7E0CBBA16CB09; https://en.wiktionary.org/wiki/念經",
+  "author": "Юлия Дидбаридзе",
+  "tournament": "Синхронный турнир «Что-то вроде „В конце ноября\"»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 82,
+  "question": "По одной версии, животное на карте из созданной в двадцатом веке тематической колоды — это змея. Какое слово мы заменили в этом вопросе?",
+  "answer": "Аспид",
+  "acceptable": "Ася",
+  "comment": "кошек у майя не было, поэтому кажется вполне вероятным, что создатели майянской колоды таким образом оставили пасхалку, отсылающую к Юрию КнОрозову и его любимой кошке по имени Аспид, с которой он изображен на известной фотографии.",
+  "source": "https://t.me/RottenKepkenChannel/41314",
+  "author": "Юлия Дидбаридзе",
+  "tournament": "Синхронный турнир «Что-то вроде „В конце ноября\"»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 83,
+  "question": "Минеральная вода БоржОми зарождается на глубине около восьми километров. Чтобы не устать, один участник посвященного БоржОми проекта закрепил над НИМ оказавшийся дома под рукой шуруповёрт. Назовите ЕГО.",
+  "answer": "колёсико мышки",
+  "acceptable": "",
+  "comment": "проект представлял собой сайт, где в реальном масштабе были воссозданы геологические пласты, под которыми находится минеральный источник. Для того чтобы проскроллить сайт, требовалось минимум 3 часа, и некоторые участники пытались облегчить этот процесс, используя велосипедное колесо, шуруповёрт и даже фен.",
+  "source": "https://youtu.be/DyeEt7CtVzE",
+  "author": "Юлия Дидбаридзе",
+  "tournament": "Синхронный турнир «Что-то вроде „В конце ноября\"»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 84,
+  "question": "[Ведущему: чётко прочитать окончания слов «варёное» и «знаемое».] В книге «ПРОПУСК кофе» лингвистка Светлана ГурьЯнова приводит ранний текст рецепта, где, в противовес современной литературной норме, употребляются слова «варёное», «персиянами и турками знАемое». Заполните пропуск первыми словами.",
+  "answer": "в начале было.",
+  "acceptable": "",
+  "comment": "книга посвящена спорным явлениям в языке — в частности, спорам вокруг грамматического рода слова «кофе». В переводе латинского рецепта, сделанного для царя Алексея Михайловича, кофе названо «изрядным лекарством против надмений, насморков и главболений» и употреблено в среднем роде. «В начале было Слово» — первые слова Евангелия от Иоанна.",
+  "source": "https://www.youtube.com/watch?v=UyWbLxLEulk#t=1h32m; https://www.youtube.com/watch?v=FT1wXU2_R-8#t=46s",
+  "author": "Максим Еремеев (Северодвинск — Москва)",
+  "tournament": "Коперник",
+  "difficulty": "medium"
+ },
+ {
+  "id": 85,
+  "question": "Одна компания продаёт ИХ с кольцами внутри, благодаря чему предложение можно сделать в нестандартной обстановке. ИХ создательница вдохновлялась таблетками Алка-ЗЕльтцер. Назовите ИХ тремя словами.",
+  "answer": "бомбочки для ванны.",
+  "acceptable": "бомбы/бомбочки для ванны/ванн.",
+  "comment": "на идею бомбочек для ванны соосновательницу компании LUSH Мо Константин натолкнули шипучие таблетки. Внутри бомбочек от производителя Pearl Bath Bombs лежат шарики с кольцами, так что предложение руки и сердца можно сделать прямо в ванне.",
+  "source": "https://bugaga.ru/interesting/1146758971-riskovannoe-no-neveroyatno-prelestnoe-predlozhenie-pokorivshee-internet.html; https://en.wikipedia.org/wiki/Bath_bomb",
+  "author": "Максим Еремеев (Северодвинск — Москва)",
+  "tournament": "Коперник",
+  "difficulty": "medium"
+ },
+ {
+  "id": 86,
+  "question": "Март 1718 года выдался очень холодным, поэтому перед тем, как посадить Степана Глебова на тройку, Пётр Первый приказал укутать того в шубу. Какое слово мы заменили в предыдущем предложении?",
+  "answer": "кол.",
+  "acceptable": "",
+  "comment": "Степан Глебов находился в интимных отношениях с Евдокией ЛопухинОй, первой женой Петра. Подозревая любовника в заговоре, царь приказал посадить того на кол, а чтобы Глебов не замёрз насмерть, на него надели шубу, шапку и сапоги. Кол и тройка — оценки.",
+  "source": "В. Н. Балязин. Жизнь и смерть Софьи-Шарлотты в Петербурге",
+  "author": "Максим Еремеев (Северодвинск — Москва)",
+  "tournament": "Коперник",
+  "difficulty": "medium"
+ },
+ {
+  "id": 87,
+  "question": "Сжалившись над приговорённым, глава группировки из одного произведения решила сохранить ему жизнь и в последний момент СДЕЛАЛА ЭТО. Чтобы проверить исторический миф, Марк СтрЕттон СДЕЛАЛ ЭТО, используя особый наконечник в форме вогнутого полумесяца. Какие три слова, начинающиеся на одну и ту же букву, мы заменили на СДЕЛАТЬ ЭТО?",
+  "answer": "выстрелить в верёвку.",
+  "acceptable": "",
+  "comment": "дезертировавшего героя хотели казнить, но глава группировки сжалилась над ним и выстрелила в верёвку, на которой тот висел. По распространённой версии, стрелы с наконечником в форме полумесяца в Средневековье использовали для стрельбы по верёвкам. Как показал эксперимент Стреттона, разрубить такой стрелой верёвку вполне возможно, хотя мало верится, что это было основным применением для подобных наконечников.",
+  "source": "Dark, s2e2, 30 минута; https://ejmas.com/jcs/jcsart_denig_0301.htm; https://greatmingmilitary.blogspot.com/2017/11/arrows-of-ming-dynasty.html; http://markstretton.blogspot.com/2016/02/did-crescent-arrow-heat-cut-rope-ship.html",
+  "author": "Максим Еремеев (Северодвинск — Москва)",
+  "tournament": "Коперник",
+  "difficulty": "medium"
+ },
+ {
+  "id": 88,
+  "question": "Английское название профессии связано с вращательным принципом работы станка, поэтому ПЕРВОГО и ВТОРОГО можно с некоторой натяжкой назвать полными тёзками. На обложке одной из записей ПЕРВОГО изображены здания на берегу Гудзона, а работами ВТОРОГО вдохновлялись представители «гудзонской школы». Назовите ПЕРВОГО и ВТОРОГО.",
+  "answer": "Вилли Токарев, Уильям Тёрнер.",
+  "acceptable": "по фамилиям, в любом порядке.",
+  "comment": "«токарь» по-английски turner, поэтому шансонье Вилли Токарева и художника Уильяма Тёрнера с натяжкой можно назвать однофамильцами. Сходство имён «Уильям» и «Вилли» только визуальное, ведь Вилли — это форма имени ВилЕн, сокращения от «Владимир Ильич Ленин». Впрочем, автору вопроса это не помешало. Вилли Токарев прославился песнями про Гудзон и небоскрёбы, а «гудзонская школа» — группа американских пейзажистов, которые, как Тёрнер, любили изображать воду.",
+  "source": "https://en.wikipedia.org/wiki/Turner_(surname); https://collectomania.ru/collection/muzyka/product/villi-tokarev-nad-gudzonom-lp; https://en.wikipedia.org/wiki/Hudson_River_School",
+  "author": "Максим Еремеев (Северодвинск — Москва)",
+  "tournament": "Коперник",
+  "difficulty": "medium"
+ },
+ {
+  "id": 89,
+  "question": "В рассказе Фрица Лейбера описывается необычный барабан, бой которого так сильно влияет на людей, что против него приходится создавать специальный ритм-противоядие. Этот рассказ упоминается в статье Википедии о НЁМ. Другие ОНИ появились у Рошель Харрис после встречи с перуанской мухой. Назовите ЕГО.",
+  "answer": "ушной червь.",
+  "acceptable": "earworm.",
+  "comment": "Ушным червём называют навязчивую мелодию, которая играет в голове. В рассказе барабан приходится останавливать специальным ритмом. Мясная муха залетела в ухо британской туристки и отложила личинки.",
+  "source": "https://en.wikipedia.org/wiki/Earworm; https://www.abc.net.au/news/2013-07-18/maggots-lived-in-womans-ear-after-peru-trip/4827524",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 90,
+  "question": "«Горчица ПРОПУСК» — это французская идиома, которой обозначают злящегося человека. В биографическом фильме о Микеланджело можно увидеть, как один из учеников ПРОПУСК скульптора. Восстановите ПРОПУСК тремя короткими словами.",
+  "answer": "бьёт в нос.",
+  "acceptable": "",
+  "comment": "Когда человек злится, краснеет, как от горчицы, которая бьёт в нос. Торриджано сломал Микеланджело нос в драке.",
+  "source": "https://ru.wikipedia.org/wiki/Он_начинает_сердиться; https://youtu.be/Mxi0lr5HuJs?si=roRbgayj9MwyMYCQ",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 91,
+  "question": "Проводя сравнение с «лежачим полицейским», Марина Русакова пишет, что благодаря живой роли соперника даже некоторые филологи ставят ЕГО выше. ИМ можно назвать пирата Кристофера Кондента, однажды неудачно вступившего в схватку с матросом. Назовите ЕГО двумя словами.",
+  "answer": "однорукий бандит.",
+  "acceptable": "",
+  "comment": "Словосочетание кажется живее благодаря слову «бандит». Пират Кондент потерял конечность в драке и стал одноруким бандитом.",
+  "source": "https://cyberleninka.ru/article/n/kategoriya-odushevlennosti-neodushevlennosti-realizatsiya-v-rechi-edinits-s-perenosnym-znacheniem; https://en.wikipedia.org/wiki/Christopher_Condent; https://www.quora.com/Why-were-pirates-hands-often-amputated",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 92,
+  "question": "Рассказывают, что на одном рождественском приёме ОНА даже похвасталась офицерам новой сумочкой с перчатками в комплекте. Назовите ЕЁ.",
+  "answer": "[И́льза] Кох.",
+  "acceptable": "фрау Абажур.",
+  "comment": "Кох была женой коменданта Бухенвальда и известна как «фрау Абажур». Обвинялась в изготовлении сувениров из человеческой кожи.",
+  "source": "https://dzen.ru/a/Xh5MzkP9wACtZCqp; https://ru.wikipedia.org/wiki/Кох,_Ильза",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 93,
+  "question": "В этом вопросе ИКС заменяет одно слово. На первых майках «ИКСА» логично преобладали синие цвета, однако спортивный берет уже тогда был красным. Препарат под названием «ИКС» оказывает комплексное действие на НЕЙ. Назовите ЕЙ одним словом.",
+  "answer": "печень.",
+  "acceptable": "",
+  "comment": "В 1892 году создан «Ливерпуль». На английском печень — «liver». Фиточай «Ливерпуль» помогает лечить печень.",
+  "source": "https://energydiet-nl.ru/tovar/liverpool/; https://en.wikipedia.org/wiki/History_of_Liverpool_F.C._(1892–1959)",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 94,
+  "question": "Герой сериала, действие которого происходит в Нью-Йорке, в последний момент начинает сомневаться, должен ли он идти на свидание. Когда он взвешивает аргументы «за» и «против», его прерывают, указывая на НЕГО. Назовите ЕГО двукоренным словом.",
+  "answer": "Таксометр",
+  "acceptable": "",
+  "comment": "Герой тратит своё время и деньги друзей в такси, поэтому они прерывают его.",
+  "source": "HIMYM, S01E13",
+  "author": "Амаль Имангулов (Берлин)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 95,
+  "question": "По одной из версий, Клеопатра выбрала кобру из-за того, что ЭТО позволяет лучше сохранить красоту тела. ЭТО происходит с эпизодическими отрицательными персонажами известного фильма по ходу неудачной ловли сокола. Назовите ЭТО достаточно точно.",
+  "answer": "смерть от удушья.",
+  "acceptable": "паралич дыхательных путей, асфиксия, удушение.",
+  "comment": "Яд кобры вызывает паралич и остановку дыхания, в отличие от яда гадюк. В V эпизоде «Звёздных войн» Дарт Вейдер удушает подчинённых с помощью Силы.",
+  "source": "М. Шифрин, «100 рассказов из истории медицины»; https://starwars.fandom.com/ru/wiki/Удушение_Силы/Канон",
+  "author": "Никита Поверинов (Москва)",
+  "tournament": "Соловушка. Беседа №2, с Андреем, Вадимом и Никитой",
+  "difficulty": "medium"
+ },
+ {
+  "id": 96,
+  "question": "Недавняя знакомая автора вопроса сравнила ИГРЕК с пулом, а ИКС с пирамидой. Назовите ИГРЕК маленькими буквами, а ИКС большими.",
+  "answer": "квиз, ЧГК",
+  "acceptable": "по упоминанию квиза и ЧГК",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 97,
+  "question": "Гимнаст Эпке Зондерланд, олимпийский чемпион в соревнованиях на перекладине, получил необычное предложение от одного нидерландского ИКСа. Услуги тренера понадобились там после того, как была улучшена одна из зон, но никто уже не помнил, что надо делать. Назовите ИКС одним словом.",
+  "answer": "зоопарк.",
+  "acceptable": "обезьянник.",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 98,
+  "question": "Во время войны с Танзанией президент Уганды Иди Амин попросил правительство одной далекой страны ненадолго одолжить для военной операции… Кого?",
+  "answer": "камикадзе.",
+  "acceptable": "летчики-камикадзе.",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 99,
+  "question": "По традиции, обручальные кольца скрепляют клятву вечной любви. Лукас Ангер решил показать возлюбленной, что уже созрел для такого решения и подарил кольцо, инкрустированное ИМ. Назовите ЕГО двумя словами.",
+  "answer": "зуб мудрости.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 100,
+  "question": "Во время съемок фильма «Клановец» актёр Ричард Бёртон очень много пил. Ближе к концу съемок режиссер похвалил ИХ, но, услышав ответ Бёртона, тут же вызвал врача. Кто такие ОНИ?",
+  "answer": "гримёры.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 101,
+  "question": "Когда Стивен Хокинг приехал с лекциями в Японию, ученого попросили не рассказывать о возможном повторном коллапсе Вселенной, чтобы не повлиять на ЭТО. Какой топоним ассоциируют с ЭТИМ в США?",
+  "answer": "Уолл-Стрит.",
+  "acceptable": "",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 102,
+  "question": "Нам точно известен день, когда президент Джон Куинси Адамс частично ослеп. Адамс был большим поклонникам ИХ, и даже путешествовал ради НИХ по стране. Назовите ИХ двумя словами.",
+  "answer": "солнечные затмения.",
+  "acceptable": "затмение Солнца.",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Соловушка. Беседа №4, с Владимиром, Иваном и Максимом",
+  "difficulty": "medium"
+ },
+ {
+  "id": 103,
+  "question": "Термин «бета» — абсолютно точная последовательность движений на трассе в скалолазании — происходит от того, что в 1980-х скалолаз Джек Миле́ски, чтобы обсуждать прохождения трасс с друзьями, использовал… Ответьте достаточно точно, что?",
+  "answer": "Бетамакс",
+  "acceptable": "Бетакам, также латиницей",
+  "comment": "Скалолаз записывал свои пролазы на видео, поэтому мог обсуждать точные движения. Замен в вопросе, как вы понимаете, не было.",
+  "source": "https://en.wikipedia.org/wiki/Beta_(climbing)",
+  "author": "Илона Прикуле",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 104,
+  "question": "На острове Тивай нет леопардов. Те мартышки Кэмпбелла, которые живут на острове Тивай, используют звук krak [крак] как общую неосмысленную вокализацию. Это позволяет говорить, что у мартышек Кэмпбелла есть… Ответьте одним словом, что?",
+  "answer": "диалекты",
+  "acceptable": "регионализмы",
+  "comment": "Мартышки Кэмпбелла обычно используют звук krak, чтобы предупредить сородичей конкретно о приближении леопарда, но в их отсутствие используют и для других целей, например, чтобы предупредить об орлах.",
+  "source": "https://www.researchgate.net/publication/268817362_Monkey_Semantics_Two_'Dialects'_of_Campbell's_Monkey_Alarm_Calls",
+  "author": "Илона Прикуле",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 105,
+  "question": "Назовите ЕЁ двумя словами. Во время съёмок сцены повешения в одном из сиквелов известной трилогии актёр стремился к реалистичности и в результате потерял сознание. Есть версия, что именно это спровоцировало ЕЁ.",
+  "answer": "Болезнь Паркинсона",
+  "acceptable": "",
+  "comment": "Майкл Джей Фокс хотел добиться реалистичности и поэтому отказался от табуретки, решив повиснуть на руке. В одном из дублей силы его покинули и он потерял сознание от удушения. Через пару лет у него появились первые признаки болезни Паркинсона.",
+  "source": "https://www.giantfreakinrobot.com/ent/michael-j-fox-nearly-died-stunt.html",
+  "author": "Роман Сорокин",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 106,
+  "question": "В начале 1980-х группа Descendents записала альбом «Milo Goes To College». Их следующий альбом вышел лишь через несколько лет. Всё дело в том, что солист группы Ма́йло О́кермэн, интересовавшийся биологией, решил СДЕЛАТЬ ЭТО. Что такое СДЕЛАТЬ ЭТО?",
+  "answer": "пойти в колледж",
+  "acceptable": "поступить в колледж, пойти/поступить в университет; прочие синонимичные с упоминанием колледжа/университета.",
+  "comment": "Майло смог успешно совмещать обе карьеры: получил докторскую степень по биологии, но в 2016 ушёл из науки, чтобы сосредоточиться на музыке.",
+  "source": "https://en.wikipedia.org/wiki/Descendents",
+  "author": "",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 107,
+  "question": "В одном треке Канье Уэст заявляет, что этот трек самая крутая вещь в клубах со времён другой песни. Назовите её автора.",
+  "answer": "50 Cent",
+  "acceptable": "Кёртис [Джеймс] Джексон [III], Андре Янг, Dr. Dre, Майк Елизондо.",
+  "comment": "Канье в треке «Send It Up» рифмует «in the club» с названием песни «In Da Club», написанной Фифти.",
+  "source": "https://genius.com/Kanye-west-send-it-up-lyrics; https://en.wikipedia.org/wiki/In_da_Club",
+  "author": "",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 108,
+  "question": "В мае 2023 года одна интернет-пользовательница обратила внимание на историю бейсболиста по имени Билл, который в финале Мировой серии против команды из Бруклина выбил из игры трёх соперников. Билл носил редкую германскую фамилию. Напишите её.",
+  "answer": "Во́мбсгансс",
+  "acceptable": "Вамбсганс, Вамбсганс, Вомбсганс, Wambsganss, Wambsgans, похожие без существенных ошибок.",
+  "comment": "Согласно этой теории, фамилия персонажа сериала Succession Тома Вомбсганса является отсылкой на легендарную игру Билла Вомбсганса, ведь Том тоже победил в финале, выбив из игры трёх сиблингов Роев в борьбе за наследство.",
+  "source": "https://www.esquire.com/entertainment/tv/a44037977/succession-finale-tom-wambsgans-baseball-theory/",
+  "author": "",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 109,
+  "question": "В конце XX века английским словом ИКС называли эксперта, обладателя тайных знаний, который мог помочь пользователю компьютера. Методика тестирования интерфейса, когда за кулисами все действия системы на самом деле выполняет человек, тоже называется в честь ИКСа. Какого именно?",
+  "answer": "Wizard of Oz",
+  "acceptable": "Волшебник страны Оз, Гудвин",
+  "comment": "Словом wizard называли хакеров и других компьютерных экспертов. По одной из версий, это повлияло на выбор названия типового интерфейса установки программ.",
+  "source": "https://en.wikipedia.org/wiki/Wizard_of_Oz_experiment; https://en.wikipedia.org/wiki/Wizard_(software)",
+  "author": "Илья Онскуль",
+  "tournament": "Соловушка. Беседа №6, с Денисом, Илоной, Ильёй и Рузелем",
+  "difficulty": "medium"
+ },
+ {
+  "id": 110,
+  "question": "Редактор действительно старался, поэтому просит сильно не обижать его в комментариях после игры. Чехов писал: «Ежедневно выслушиваешь жалобы супруги на то, что ОН, мерзавец, слил вместо условленных десяти… только пять». Назовите ЕГО словом с одинаковыми гласными.",
+  "answer": "Водовоз",
+  "acceptable": "",
+  "comment": "До изобретения центрального водоснабжения водовоз в любом городе был человеком, от которого зависела жизнь. Недоливал мерзавец вёдра.",
+  "source": "",
+  "author": "Никита Ивинский (Санкт-Петербург)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 111,
+  "question": "В 80-е годы на персональных компьютерах часто имелись два съемных. Поэтому, позже появившиеся несъемные до сих пор называют ТРЕТЬИМИ. Ответьте, что мы заменили на ТРЕТИЙ.",
+  "answer": "Диск С",
+  "acceptable": "Disk C",
+  "comment": "«Диски А» и «B» были выполнены в виде сменных дискет. Жесткий диск компьютера по умолчанию называют «Диск С».",
+  "source": "",
+  "author": "Никита Ивинский (Санкт-Петербург)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 112,
+  "question": "По одной из версий, повесть Гофмана о Мадлен де Скюде́ри является первым произведением известного жанра. В одной статье мадмуазель Скюде́ри названа ЕЮ XVII века. Назовите ЕЁ двумя словами, которые начинаются на одну и ту же букву.",
+  "answer": "Мисс Марпл",
+  "acceptable": "",
+  "comment": "Повесть Гофмана вышла на 19 лет раньше, чем рассказ По «Убийство на улице Морг».",
+  "source": "",
+  "author": "Никита Ивинский (Санкт-Петербург)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 113,
+  "question": "Согласно некоторым источникам, кондитер Абрикосов использовал для неких целей игрушки из бумаги или картинки. Назовите известный бренд, который начал делать тоже самое примерно на сто лет позже.",
+  "answer": "Киндер-сюрприз",
+  "acceptable": "Киндер сюрприз, Ферреро",
+  "comment": "Внутри шоколадных яиц фирмы «Товарищество А.И. Абрикосова и сыновей» были спрятаны игрушки. В 1972 году схожий продукт был запущен в Италии.",
+  "source": "",
+  "author": "Никита Ивинский (Санкт-Петербург)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 114,
+  "question": "В одной шутке сказано, что ОНА будет работать как часы – на камнях. Один медицинский сайт утверждает, что в германской ветви индоевропейских языков слово «lip» переводится и как ОНА, и как «жизнь». Что такое ОНА?",
+  "answer": "Печень",
+  "acceptable": "",
+  "comment": "Сохранилось сходство английских слов «liver-live/life» и немецких «Leber-Leben».",
+  "source": "",
+  "author": "Никита Ивинский (Санкт-Петербург)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 115,
+  "question": "Успеху предприятия Анны-Марии способствовало увлечение англичан громкими уголовными процессами в отношении убийц. Назовите фамилию Анны-Марии.",
+  "answer": "Тюссо",
+  "acceptable": "",
+  "comment": "Первыми экспонатами такого рода в салоне мадам Тюссо были палачи и жертвы Французской революции.",
+  "source": "",
+  "author": "Сергей Митюнин (Иваново)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 116,
+  "question": "Методологическая «ошибка меткого стрелка» получила своё название из истории, в которой мишень рисовали уже после сделанных выстрелов. Пример такой ошибки — популярность трудов француза, жившего в шестнадцатом веке. Назовите этого француза.",
+  "answer": "[Мишель де] Нострадамус",
+  "acceptable": "",
+  "comment": "Для большинства из предсказаний Нострадамуса рано или поздно случится подходящее событие, ведь они расплывчаты и их очень много.",
+  "source": "",
+  "author": "Константин Ларионов (Москва)",
+  "tournament": "Открытый синхронный турнир «Квизобрейн-3»",
+  "difficulty": "medium"
+ },
+ {
+  "id": 117,
+  "question": "Как выяснилось, начиная с четвёртого НЕГО собака испытывала беспокойство, поэтому для человека ИХ число сократили. Назовите ИХ.",
+  "answer": "Витки [вокруг Земли].",
+  "acceptable": "Обороты/круги вокруг Земли.",
+  "comment": "Белка стала крайне беспокойна, пыталась вырваться из ремней и лаяла. Состояние космической собаки повлияло на то, что в программе первого полёта человека в космос число витков вокруг Земли сократили до одного.",
+  "source": "Журнал «Мир фантастики», октябрь 2020; https://ru.wikipedia.org/wiki/Белка_и_Стрелка#Полёт",
+  "author": "Александр Быков (Киров)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 118,
+  "question": "В заставке мультсериала, который показывали по российскому ТВ в 90-х, пелось, что герои хорошо освоили базовые уроки и знают их как... Закончите фразу.",
+  "answer": "Дважды два.",
+  "acceptable": "2х2.",
+  "comment": "Русский текст заставки «Черепашек-ниндзя»: «Учитель дал уроки мастерства, / Теперь мы знаем их как дважды два». «2х2» — название канала, который показал россиянам этот и многие другие замечательные мультсериалы.",
+  "source": "https://www.kinopoisk.ru/film/94890/reviews/",
+  "author": "Константин Сахаров (Москва)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 119,
+  "question": "Известную сеть прозвали «Тысяча вопросов». Её основное блюдо получило популярность в конце шестидесятых из-за сходства с транспортным средством. Каким?",
+  "answer": "Подводная лодка.",
+  "acceptable": "[Жёлтая] субмарина.",
+  "comment": "В любом филиале вам помогут максимально детально укомплектовать свой сэндвич ингредиентами и соусами — вот почему «тысяча вопросов». Сэндвичи из батонов напоминают подводные лодки, поэтому и получили в Америке название «саб», а сеть — Subway.",
+  "source": "http://glowsubs.ru/o-kompanii/istoria/; https://ru.wikipedia.org/wiki/Subway_(сеть_ресторанов)",
+  "author": "Константин Сахаров (Москва)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 120,
+  "question": "Из-за технических проблем, вызванных пожаром, запуск телеканала «Би-би-си» задержался. Поэтому, когда канал всё же впервые вышел в эфир, ведущий символично СДЕЛАЛ ЭТО. Исполнители какого произведения ДЕЛАЮТ ЭТО?",
+  "answer": "«Прощальная симфония» [Йозефа Гайдна].",
+  "acceptable": "Симфония №45 [Йозефа Гайдна].",
+  "comment": "В запланированный день запуска в Лондоне случился пожар, который привёл к массовому отключению электричества. На следующий день, начиная эфир в день рождения канала, ведущий символически задул свечу — с отсылкой ещё и к аварии.",
+  "source": "https://en.wikipedia.org/wiki/BBC_Two#Launch; https://ru.wikipedia.org/wiki/Симфония_№_45_(Гайдн)",
+  "author": "Филипп Терёхин (Москва)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 121,
+  "question": "Историк пишет, что в 60-е годы ИКСЫ вновь стали нужны не только как учебные пособия, так как начали использоваться в приборных панелях. Назовите ИКС словом латинского происхождения.",
+  "answer": "Глобус.",
+  "acceptable": "",
+  "comment": "К середине XX века почти никто не пользовался глобусом с навигационными целями. С развитием космонавтики понадобились карты, установленные непосредственно в приборных панелях космических кораблей, а крупный масштаб не требовался.",
+  "source": "http://vivovoco.astronet.ru/VV/JOURNAL/NATURE/08_07/GLOBUS.HTM",
+  "author": "Иван Ерёмин (Краснодар)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 122,
+  "question": "Оригинальная повесть была написана в 1974 году, поэтому ОНИ были довольно большими — размером с мышей. Кто ОНИ?",
+  "answer": "Гарантийные человечки.",
+  "acceptable": "Фиксики.",
+  "comment": "Герои мультсериала «Фиксики» — маленькие человечки, обеспечивающие работу электроприборов. Миниатюризация в 70-х, когда Эдуард Успенский писал оригинальную повесть, была не та, что в XXI веке.",
+  "source": "https://ru.wikipedia.org/wiki/Фиксики",
+  "author": "Иван Ерёмин (Краснодар)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 123,
+  "question": "1 апреля 2017 года корпорация Google сообщила о планах открыть дата-центр на Марсе, чтобы хранить там данные пользователей на случай глобальной катастрофы и гибели человечества. Дата-центру дали имя музыканта, чья карьера на Земле продолжалась пять лет. Назовите эту рок-звезду.",
+  "answer": "Зигги Стардаст.",
+  "acceptable": "Ziggy Stardust.",
+  "comment": "Зигги Стардаст — самый популярный персонаж Дэвида Боуи. По сюжету пластинки 1972 года, пришелец-андрогин становится рок-звездой планетарного масштаба за пять лет до гибели Земли и человечества.",
+  "source": "https://cloud.google.com/blog/products/infrastructure/google-cloud-platform-expands-to-mars; https://en.wikipedia.org/wiki/Ziggy_Stardust_(character)",
+  "author": "Сергей Донецков (Тарту)",
+  "tournament": "Синхронный турнир «Части Вселенной 1960–1999» (2022)",
+  "difficulty": "medium"
+ },
+ {
+  "id": 124,
+  "question": "Недавно в городке Андо́вер можно было действительно увидеть крыши отдельно от домов. В каком штате располагается город Андовер?",
+  "answer": "Канзас.",
+  "acceptable": "",
+  "comment": "Штат известен своим расположением на Аллее торнадо, и в очередной раз пережил сильный ураган. Как и в случае с канзасскими Элли и Тотошкой, в Андовере в воздухе тоже оказались летающие домики.",
+  "source": "https://www.mirror.co.uk/news/us-news/breaking-terrifying-twister-rages-through-26837403",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 125,
+  "question": "Автор вопроса захотел найти в интернете правила новой интеллектуальной организации, однако поисковик решил, что в запросе пропустили букву, и выдал статью о НЕЙ. ОНА появилась в городах Южной Италии. Назовите ЕЁ 6-буквенным словом.",
+  "answer": "Омерта.",
+  "acceptable": "",
+  "comment": "Автор вопроса интересуется судьбой нашего с вами интеллектуального движения, а потому хотел узнать, существует ли кодекс недавно созданной Международной ассоциации интеллектуальных игр. Впрочем, по запросу «кодекс МАИИ», гугл сформировал лишь запрос «кодекс мафии», выдав статью об оме́рте.",
+  "source": "https://ru.wikipedia.org/wiki/Омерта",
+  "author": "Андрей Акимов (Минск)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 126,
+  "question": "По легенде, найденную в Самарка́нде рукопись Усма́н ибн Аффа́н читал, когда был убит. Поэтому рукопись тоже можно назвать ИМ. Другой ОН создавался с 1995 по 1997 год. Какие два слова на одну и ту же букву мы заменили словом «ОН»?",
+  "answer": "Кровавый Коран.",
+  "acceptable": "",
+  "comment": "Усмана ибн Аффана якобы закололи мятежники во время чтения Корана, и его кровь брызнула на рукопись. Другой Кровавый Коран был написан в конце 1990-х кровью Саддама Хусейна.",
+  "source": "https://ru.wikipedia.org/wiki/Самаркандский_куфический_Коран; https://ru.wikipedia.org/wiki/Кровавый_Коран",
+  "author": "Руслан Алиев (Москва)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 127,
+  "question": "Туристический сервис изучил, куда можно доехать из Москвы, если есть ЭТО. В топ кроме областного центра попали Ростов, Данилов и Переславль. Назовите ЭТО или даже сдайте.",
+  "answer": "1000 рублей.",
+  "acceptable": "",
+  "comment": "Все эти города входят в Ярославскую область, а Ярославль изображён на купюре в 1000 рублей.",
+  "source": "https://rustur.ru/za-odin-yaroslavl-mozhno-doexat-v-chetyre-yaroslavskix-goroda",
+  "author": "Константин Сахаров (Москва)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 128,
+  "question": "Английское слово «рэнгл» означает «ссора, пререкания». Этим словом в XX веке в США стали называть споры о НЁМ. В честь кого ОН назван?",
+  "answer": "[Фердинанд Петрович] Врангель.",
+  "acceptable": "",
+  "comment": "Остров Врангеля назван в честь мореплавателя Фердинанда Петровича Врангеля. С 1920-х годов высказывалось мнение, что по нормам международного права остров мог бы принадлежать США, и эта полемика получила там название «Wrangle over Wrangel Island».",
+  "source": "https://ru.wikipedia.org/wiki/Остров_Врангеля#Установление_Советским_Союзом_контроля_над_островом_и_современное_состояние",
+  "author": "Юлия Мило́ва (Берген)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 129,
+  "question": "Сюжет был создан на основе городской легенды Куйбышева. «Он смотрит на мир широко раскрытыми глазами, свободен и говорит просто, ничего не сдерживает его душевных порывов», — так о герое сказал один из сценаристов. Напишите говорящую фамилию этого героя.",
+  "answer": "Деточкин.",
+  "acceptable": "",
+  "comment": "Среди кинодраматургов, работавших в тандеме, известны Эмиль Брагинский и Эльдар Рязанов. Куйбышев, ныне Самара — почти автомобильная столица Советского Союза, стоящая на Волге, и именно «Волги» Деточкин угонял.",
+  "source": "https://zen.yandex.ru/media/kinonytik/kak-sozdavali-film-beregis-avtomobilia-i-za-chto-riazanov-chuvstvoval-vinu-pered-smoktunovskim-5fe3a2fa40c4c26139386fb1",
+  "author": "Гай Кузнецов (Москва)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 130,
+  "question": "Сенатор-популист Джо́зеф Макка́рти был невысокого мнения о своих противниках. Ма́ргарет Смит, лидера группы выступивших против него коллег, Маккарти с презрением сравнивал... С кем?",
+  "answer": "С Белоснежкой.",
+  "acceptable": "",
+  "comment": "Своих противников самоуверенный Маккарти называл Белоснежкой и шестью гномами. Правда, уже вскоре ему стало не до смеха.",
+  "source": "https://en.wikipedia.org/wiki/Joseph_McCarthy",
+  "author": "Александр Рождествин (Самара)",
+  "tournament": "Чизкейкфест. Лучший вид на этот город / Столикий синхрон",
+  "difficulty": "medium"
+ },
+ {
+  "id": 131,
+  "question": "Разминочный вопрос, за который не начисляется очко. Одна китайская деревня пострадала от набега диких кабанов. Можно сказать, что кабаны завоевали деревню. Несколько дней жители даже не могли выйти за продуктами. Между жителями возникли жаркие споры: что делать? К счастью, никто не умер. Сколько было кабанов?",
+  "answer": "4/четыре",
+  "acceptable": "",
+  "comment": "Слова и фразы «завоевали деревню», «не могли сходить за продуктами», «жаркие споры» и «умер» намекают на 4 всадников Апокалипсиса.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 132,
+  "question": "В советском фильме бабушка говорит военному, что танки по данной дороге не смогут пройти. Военный возражает: дескать, пройдут. И далее упоминает особенность их конструкции, которой обладал и первый в истории российский танк. В чём состояла эта особенность?",
+  "answer": "Одна гусеница",
+  "acceptable": "нет второй/другой/2-й гусеницы; 1 гусеница",
+  "comment": "Речь идёт о танке Вездеход конструкции Пороховщикова из фильма «Ответный ход».",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 133,
+  "question": "Дуплет!\n1. Специалисты рекомендуют заполнять пространство ТАКОЙ ЕЮ не более, чем на треть, – остальное заполнится при расширении. А если вы планируете сделать паузу на пару часов, воспользуйтесь пистолетом. Назовите ТАКУЮ ЕЁ.\n2. Редактор нашёл рецепт, для которого нужен всего один ингредиент. Чем он жирнее и чем больше времени вы потратите, тем толще получится готовое блюдо. Всё, что нужно делать, – это периодически снимать ЕЁ. Назовите ЕЁ словом с суффиксом.",
+  "answer": "1. Монтажная пена 2. Пенка",
+  "acceptable": "строительная пена; сокращения «монт.», «стр.», «строит.»",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 134,
+  "question": "Известного музыканта спросили, кто лучший гитарист в мире: он или его партнёр по группе? Тот ответил: «Слон… знает, что я!» Догадайтесь, зачем мы добавили в цитату две буквы, и назовите группу, в которой играют эти гитаристы.",
+  "answer": "[The] Rolling stones",
+  "acceptable": "Роллинг стоунз, Роллинги, Катящиеся камни",
+  "comment": "Кит Ричардс и Рон Вуд. Добавлены буквы С и Л для отсылки к выражению о земле на трёх китах.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 135,
+  "question": "В вопросе слова ОНО и ПЕРВЫЙ заменяют другие слова. У меня ОНО – одно. У ПЕРВОГО – два ИХ. А у Кастора в течение нескольких минут ЕГО не было вообще. Какое слово заменено на ОНО?",
+  "answer": "Лицо",
+  "acceptable": "",
+  "comment": "ПЕРВЫЙ – двуликий бог Янус. По фильму «Без лица» у Кастора Троя временно не было лица.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 136,
+  "question": "Великий режиссёр Стивен Спилберг уже в 17 лет снял полнометражный фильм, в 39 – получил премию американской киноакадемии, в 51 – стал самым богатым в индустрии развлечений. И только в 55 лет он стал наконец ИКСОМ! Назовите ИКСА словом, в котором все гласные одинаковые.",
+  "answer": "Бакалавр",
+  "acceptable": "",
+  "comment": "Спилберг получил диплом в 55 лет, хотя достиг множества успехов без высшего образования.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 137,
+  "question": "В сериале «Перевал ДЯтлова» есть эпизод, когда выпускник института просит взять его в поход, но получает отказ. Отражает ли эпизод политическую позицию сценаристов или является просто совпадением, выяснить не удалось. Назовите этого выпускника.",
+  "answer": "[Борис] Ельцин",
+  "acceptable": "Ельцын",
+  "comment": "Ельцин учился в Уральском политехническом институте, где учился и Игорь Дятлов.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 138,
+  "question": "В марте 53-го года мальчик опоздал на первый урок, а когда вошёл в класс, все плакали. Ничего не понимающему опоздуну учительница сказала: «Сталин умер!» Мальчик извинился за опоздание и спокойно сел за парту. Учительница возмутилась: «И всё? Ты почему не плачешь?» Мальчик догадался ответить: «А у меня ПРОПУСК». После этих слов учительница прекратила возмущаться, но стала недовольно смотреть на других, плачущих детей. Заполните ПРОПУСК двумя словами.",
+  "answer": "Слёзы кончились",
+  "acceptable": "слёзы закончились",
+  "comment": "О смерти Сталина сообщили в 6 утра по радио. Учительница предположила, что мальчик раньше узнал новость.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 139,
+  "question": "Театралам ИКС знаком с середины 19-го века. ИКС можно встретить в кулинарных книгах. Сторонники традиционных семейных ценностей часто используют ИКС в качестве аргумента, хотя примерно век назад ИКС упоминали их противники. Назовите ИКС двумя словами.",
+  "answer": "Стакан воды",
+  "acceptable": "",
+  "comment": "Пьеса Скриба «Стакан воды» (1840), кулинарные рецепты, пословица о стакане воды в старости, теория стакана воды в СССР.",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 140,
+  "question": "Вы видите фамилию датского спортсмена, записанную по-датски как «Eg». На соревновании в США вежливые и грамотные журналисты вполне могли обратиться к нему так же, как в советском фильме для детей к одному персонажу обращались другие герои, но это было не очень вежливо. Напишите это обращение двумя словами.",
+  "answer": "Мистер Эй",
+  "acceptable": "",
+  "comment": "Датское слово «eg» читается «эй». В фильме «Мэри Поппинс, до свидания» персонажа зовут «мистер Эй».",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 141,
+  "question": "Необычный дуплет! 2 вопроса по 30 секунд размышления на каждый. Поскольку ответы на оба вопроса одинаковые, команде, чтобы набрать очко, достаточно сдать верный ответ на один любой вопрос.\n\n1-й вопрос более близок для женской половины игроков. Три плюс три равно восемь с половиной. Хотя может быть девять с половиной, восемь и четыре десятых, девять и восемь десятых и другие варианты. Но лучше, конечно, десять и восемь десятых. Назовите двумя словами область деятельности, в которой используется такая странная арифметика.\n\n2-й вопрос более близок для мужской половины игроков. Четыре плюс три равно тринадцать и девять десятых. Хотя может быть пятнадцать и девять десятых, пятнадцать и две десятых, четырнадцать и семь десятых и другие варианты. Но лучше, конечно, шестнадцать и четыре десятых. Назовите двумя словами область деятельности, в которой используется такая странная арифметика.",
+  "answer": "Фигурное катание",
+  "acceptable": "одиночное катание, судейство фигуристов/-ок, судейство прыжков, оценка прыжков, обучение фигуристов/-ок",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "КОТе4ество-2",
+  "difficulty": "hard"
+ },
+ {
+  "id": 142,
+  "question": "По одной из многочисленных версий, ЭТО обязано своим появлением печенью марки «Орринс-Кендалл», которое ассоциировалось с высоким качеством. Напишите ЭТО.",
+  "answer": "OK.",
+  "acceptable": "O.K., окей, okay, O.k., Ok.",
+  "comment": "согласно этой версии, слово «окей» представляет собой сокращённое название марки печенья.",
+  "source": "М. Брэгг. Приключения английского языка; https://goo.gl/EvXonX",
+  "author": "Мария Подрядчикова (Волгоград)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 143,
+  "question": "Сестру героини английского романа звали Руби. Сама героиня сначала сократила своё имя, а потом взяла себе имя принцессы. Как её звали изначально?",
+  "answer": "Диамант.",
+  "acceptable": "Диаморд, Даймонд, Diamond, Diamant.",
+  "comment": "имя героини означало «бриллиант», подобно тому как имя её сестры означало «рубин». Однако имя ей не нравилось, поэтому она стала называть себя сначала Ди, а потом Дианой.",
+  "source": "А. Мёрдок. Ученик философа; https://goo.gl/rLP5yd",
+  "author": "Максим Мерзляков (Воронеж)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 144,
+  "question": "Пётр Вайль отмечает, что даже после того как Ваграму Бахчаняну СДЕЛАЛИ ЭТО, его сарказм остался прежним. Ответьте тремя словами: что именно сделали?",
+  "answer": "удалили желчный пузырь.",
+  "acceptable": "по упоминанию удаления желчного пузыря без неверных уточнений.",
+  "comment": "несмотря на то, что своей желчи у Бахчаняна не осталось, его сарказм был по-прежнему едок.",
+  "source": "П. Вайль. Свобода — точка отсчета. О жизни, искусстве и себе; https://goo.gl/RXAcFh",
+  "author": "Дмитрий Голдов (Москва)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 145,
+  "question": "Стефани Флаксмен советует воспринимать текст как целое, а не как совокупность отдельных предложений. По её словам, ни одно предложение ПРОПУСК. Какие два слова, начинающиеся на соседние буквы алфавита, мы пропустили?",
+  "answer": "не остров.",
+  "acceptable": "",
+  "comment": "Стефани Флаксмен перефразировала слова Джона Донна о том, что нет человека, который был бы как остров, сам по себе.",
+  "source": "https://ru.wikipedia.org/wiki/По_ком_звонит_колокол",
+  "author": "Мария Подрядчикова (Волгоград)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 146,
+  "question": "По словам Джеральда Даррелла, во время поездок по Аргентине можно на полпути увидеть как начало, так и конец маршрута. Аргентинскую пампу Даррелл сравнил с НИМ. Считается, что первый ОН был изготовлен мастером Анри де Винемом для Людовика Одиннадцатого. Назовите ЕГО двумя словами.",
+  "answer": "бильярдный стол.",
+  "acceptable": "биллиардный стол.",
+  "comment": "пампа настолько плоская, что многокилометровые маршруты просматриваются от начала до конца. Плоскую и зелёную пампу Даррелл сравнил с бильярдным столом.",
+  "source": "Д. Даррелл. Под пологом пьяного леса; https://goo.gl/TrKgpv",
+  "author": "Максим Мерзляков (Воронеж)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 147,
+  "question": "В четырнадцатом веке Кола ди Риенцо узурпировал власть в Риме и объявил себя трибуном. По словам Бригитты Хаман, Гитлер стал считать себя инкарнацией Риенцо после того, как познакомился с НЕЮ, написанной в 1840 году. Назовите любую другую ЕЁ.",
+  "answer": "«Золото Рейна», «Валькирия», «Зигфрид», «Гибель богов» и др.",
+  "acceptable": "любая опера Вагнера.",
+  "comment": "Гитлер познакомился с оперой Вагнера «Риенци» и ощутил мистическое родство со средневековым итальянцем.",
+  "source": "https://ru.wikipedia.org/wiki/Риенци_(опера)",
+  "author": "Мария Подрядчикова (Волгоград)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 148,
+  "question": "Персонаж российского романа получил прозвище «Немец» из-за ЭТОГО. Как ни странно, у героя повести 1834 года ЭТОГО нет, а у героя оперы 1890 года ЭТО есть. Ответьте точно: что ЭТО?",
+  "answer": "имя Герман.",
+  "acceptable": "по слову Герман с одной «н» без неверных уточнений.",
+  "comment": "героя звали Германом, поэтому его сначала называли германцем, а потом немцем. Героя повести Пушкина «Пиковая дама» зовут Германн с двумя буквами «н». В опере Чайковского Герман уже с одной «н», и это имя.",
+  "source": "А. Иванов. Ненастье; https://goo.gl/zKE3ZV",
+  "author": "Максим Мерзляков (Воронеж)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 149,
+  "question": "По словам Мишеля Фейбера, дамы викторианской Англии из-за корсетов дышали так, словно СДЕЛАЛИ ЭТО. Напишите фамилию рыцаря, который первым СДЕЛАЛ ЭТО.",
+  "answer": "Хиллари.",
+  "acceptable": "по фамилии Хиллари без неверных уточнений.",
+  "comment": "СДЕЛАТЬ ЭТО — взобраться на Эверест. Корсеты затрудняли дыхание. На самом деле первым взошёл Эдмунд Хиллари.",
+  "source": "М. Фейбер. Багровый лепесток и белый; https://goo.gl/G2QALg",
+  "author": "Максим Мерзляков (Воронеж)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 150,
+  "question": "Сходство одной из ЕЁ разновидностей с рыцарскими турнирами проявлялось, например, в том, что выбитый из седла должен был лично отомстить обидчику, заколов его ударом шпаги. Назовите ЕЁ одним словом.",
+  "answer": "коррида.",
+  "acceptable": "тавромахия, торада.",
+  "comment": "тореадор на корриде мог сражаться верхом. Бык, выбивший тореро из седла, оскорблял его, а смыть оскорбление можно было только кровью.",
+  "source": "М. Дефурно. Повседневная жизнь Испании Золотого века; https://goo.gl/8N2Z8L",
+  "author": "Максим Мерзляков (Воронеж)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 151,
+  "question": "Персонаж Владимира МакАнина утверждает, что известный человек терпеть не мог кентавров и хотел их разъединить. В произведении другого автора этот человек признавался, что хотел написать последнюю и самую важную часть — о стране мёртвых. Назовите этого человека.",
+  "answer": "Джонатан Свифт.",
+  "acceptable": "по фамилии Свифт без неверных уточнений.",
+  "comment": "по версии Маканина, Свифту удалось разъединить кентавров на благородных гуингмов и мерзких йеху. Другое произведение — пьеса Григория Горина, в которой Свифт хочет написать книгу о пятом путешествии Гулливера — в страну мёртвых.",
+  "source": "В. Маканин. Испуг; https://goo.gl/E7VF3r",
+  "author": "Максим Мерзляков (Воронеж)",
+  "tournament": "V Открытый кубок Чёрного моря (Батуми)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 152,
+  "question": "Согласно сербской поговорке первый ОН отправляется в воду. Какое короткое нехарактерное имя ОН получил в произведении 1976 года?",
+  "answer": "Гав",
+  "acceptable": "точный ответ",
+  "comment": "речь в вопросе идёт о котятах; к сожалению, в Сербии, как и в остальном мире, котят, родившихся против воли хозяев, принято топить. Поговорка «первый котёнок – в воду» аналогична нашей поговорке про «первый блин комом». Известный мультфильм о котёнке по имени Гав вышел в 1976 году.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 153,
+  "question": "Паблик, рассказывающий о российских эмигрантах в Сербию в 1920-х годах, называется ТАКОЙ ОН. Какие два слова, начинающиеся одинаково, заменены на ТАКОЙ ОН.",
+  "answer": "белый Белград",
+  "acceptable": "",
+  "comment": "эмигранты были настолько белыми, что Белград как никогда оправдывал свое название.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 154,
+  "question": "На фасаде ныне разрушенного авиационного штаба в сербском Зе́муне размещена скульптура, изображающая ЕГО. ОН дал название в том числе и зе́мунскому транспортному заводу. Назовите ЕГО.",
+  "answer": "Икар",
+  "acceptable": "",
+  "comment": "символично, что скульптура Икара была размещена на фасаде авиационного штаба, который был разбомблен в 1999 году. Завод «Икарус» существовал и в югославском Земуне: сперва он производил самолеты, но затем перешёл на автобусы.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 155,
+  "question": "В сербской версии ОНА заканчивается раем. Другая «ОНА» 1963 года опубликована на Балканах под названием «Шко́лице». Назовите ЕЁ тремя словами.",
+  "answer": "игра в классики",
+  "acceptable": "",
+  "comment": "в русской версии игра в классики чаще всего заканчиваются отдыхом, в сербской – «выпускники» попадают в рай. Во второй части вопроса речь идёт о романе Ху́лио Корта́сара «Игра в классики».",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 156,
+  "question": "Старые воеводинские дома как правило одноэтажные и вытянутые, и ориентированы перпендикулярно улице. Одной из причин такой конструкции является ОН, установленный в Австро-Венгрии. Назовите ЕГО тремя словами так, чтобы два из них начинались на две одинаковые буквы, и два – на соседние буквы алфавита.",
+  "answer": "налог на окна.",
+  "acceptable": "",
+  "comment": "существовавший в Австро-Венгрии налог на окна подталкивал жителей к строительству домов, обращенных к проезжей части своей узкой стороной, с одним, ну двумя окнами.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 157,
+  "question": "Согласно опросам, ОН входит в топ-3 [топ-три] сербских бытовых страхов, наряду с невыключенным бойлером и грозой. Какого ныне живущего изобретателя можно в НЁМ увидеть?",
+  "answer": "Возняка",
+  "acceptable": "Стив или Стивен Возняк, по фамилии, в любом падеже, без неверных уточнений",
+  "comment": "ОН – это сквозняк, наводящий страх и трепет на обывателей посильнее невыключенного бойлера и грозы. В «сквозняке» можно увидеть фамилию Стивена Возняка – одного из изобретателей компьютера Apple.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 158,
+  "question": "Вопрос-дуплет. Два вопроса по 30 секунд обсуждения на каждый.\n1. Район Дже́рдапа, где русло Дуная резко сужается и течёт между Карпатскими горами, носит название «Железные ОНИ». Назовите ИХ шестибуквенным словом.\n2. Регион восточнее Дже́рдапа, где русло Дуная сильно извивается, называют ОН. Назовите ЕГО коротким словом.",
+  "answer": "1. Ворота 2. Ключ",
+  "acceptable": "",
+  "comment": "Дунай из широкой равнинной реки превращается в узкую горную. Этот участок называют Железными воротами. После Карпатских гор течение проходит снова по равнинной местности, где Дунай сильно извивается. За искривленную форму русла эта местность получила от картографов название «Ключ».",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 159,
+  "question": "Персонажи боснийского фильма, события которого происходят в 1996 году, готовятся к встрече Клинтона и украшают город. Однако сотрудники швейной фабрики по привычке использовали ИХ. У «Партизана» тоже есть ОНА. Назовите ЕЁ двумя словами.",
+  "answer": "красная звезда.",
+  "acceptable": "",
+  "comment": "в 1996 году Босния и Герцеговина была очень молодым государством с социалистическим наследием. Когда город стали украшать к приезду Клинтона и готовить американские флаги, на швейной фабрике по традиции использовали красные звёзды, которых было вдоволь припасено с югославских времён.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 160,
+  "question": "Ве́сна Ву́лович в одном интервью отметила, что выжила в авиакатастрофе, в гражданской войне, во времена бомбардировок в 90-е и так далее. В том же интервью Ву́лович сравнила себя с НЕЙ. Назовите ЕЁ одним словом.",
+  "answer": "кошка.",
+  "acceptable": "точный ответ.",
+  "comment": "По мысли Ву́лович, у неё как у кошки девять жизней.",
+  "source": "",
+  "author": "Серафим Шибанов (Астана)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 161,
+  "question": "Одна из гостиниц в черногорском городе Пе́раст называется Homo est [Хо́мо Эст]. Какие два слова заменены в этом вопросе?",
+  "answer": "Per Astra",
+  "acceptable": "",
+  "comment": "название гостиницы в городе Пе́расте – «Per astra» [Пер aстра] отсылает к выражению «Через тернии к звёздам» — Per aspera ad astra. В качестве замены использовались первое и последнее слова другого известного изречения – Homo homini lupus est [Хомо хомини лупус эст].",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 162,
+  "question": "В 1985 году в Югославии вышла банкнота с портретом Ио́сипа Броз Ти́то. В народе данную банкноту стали называть «мрак». Восстановите сербское слово, в котором мы пропустили две согласные буквы.",
+  "answer": "мртвак",
+  "acceptable": "",
+  "comment": "Тито умер в 1980, так что и прозвище у банкноты соответствующее – мртвак, что значит мертвец.",
+  "source": "",
+  "author": "Вадим Раскумандрин (Санкт-Петербург)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 163,
+  "question": "В музее-мавзолее Ио́сипа Броз Ти́то есть коллекция из более чем 20000 [двадцати тысяч] курительных трубок, выполненных из дерева, металла, пластика и фарфора, и символизировавших единство народов и поколений. Какие два слова мы заменили на курительные трубки?",
+  "answer": "эстафетные палочки.",
+  "acceptable": "",
+  "comment": "Иосип Броз Тито коллекционировал эстафетные палочки, и многие из них представляют произведения искусства и выставлены в музее «Дом цветов» в Белграде.",
+  "source": "",
+  "author": "Михаил Наугольнов (Выборг – Белград)",
+  "tournament": "Балканфест (Белград)",
+  "difficulty": "hard"
+ },
+ {
+  "id": 164,
+  "question": "Створки средневековых триптихов могли открываться и закрываться. На одном триптихе Босха на задних поверхностях створок был изображён Иисус. Искусствовед пишет, что задумка художника состояла в том, чтобы совершить символическое действие. Для совершения того же символического действия используют ЕЙ. Назовите ЕЙ.",
+  "answer": "просфора",
+  "acceptable": "просвира, гостия, облатка",
+  "comment": "Иисус был изображён на внешней стороне створок, таким образом, раскрывая триптих, вы как бы преломляли тело Господа. В Евангелии Иисус взял хлеб и преломил его.",
+  "source": "М.Р. Майзульс «Между Христом и Антихристом», Библия",
+  "author": "Ирина Колесникова",
+  "tournament": "Кубок Дисгармонии — 5. Хаотистский дрифт",
+  "difficulty": "hard"
+ },
+ {
+  "id": 165,
+  "question": "В опере Верди хозяин упрекает слугу в пьянстве, но добавляет, что когда по ночам они ходят от одного кабака к другому, слуга оказывается всё же полезен. В написанной в 20 веке сказке своему хозяину точно так же полезен оказался ОН. Напишите ЕГО имя.",
+  "answer": "Рудольф",
+  "acceptable": "",
+  "comment": "Цитата из оперы Верди: «Каждую ночь мы бродим из таверны в таверну. И твой нос пунцовый мне всегда во мраке светит верно!» Олень Рудольф осветил путь своим носом в сказке, написанной в 1939 году.",
+  "source": "Верди «Фальстаф», информация о Рудольфе олене",
+  "author": "Евгений Миротин",
+  "tournament": "Кубок Дисгармонии — 5. Хаотистский дрифт",
+  "difficulty": "hard"
+ },
+ {
+  "id": 166,
+  "question": "Капитан Америка храбро противостоит устоявшимся институтам, а также глобальным организациям, тайно манипулирующим правительствами. Устойчивое выражение, которое планировали использовать для подзаголовка предстоящего фильма, вызвало ассоциации с антисемитизмом. Поэтому использовали другое выражение, которое в 20 веке стало названием романа. Напишите два английских слова, общие для этих выражений.",
+  "answer": "New World",
+  "acceptable": "",
+  "comment": "Выражение New World Order используется конспирологами. Поэтому фильм назвали Brave New World — цитата из Шекспира, название романа Олдоса Хаксли.",
+  "source": "Collider, Википедия",
+  "author": "Евгений Миротин",
+  "tournament": "Кубок Дисгармонии — 5. Хаотистский дрифт",
+  "difficulty": "hard"
+ },
+ {
+  "id": 167,
+  "question": "Разработанная компанией OpenAI система распознавания речи называется «шёпот» — whisper. Интернет-пользовательница считает, что на этом разработка аналогичных программ прекратится, и перефразирует последние слова произведения 20 века. Кто его написал?",
+  "answer": "Томас Стернз Элиот",
+  "acceptable": "",
+  "comment": "Цитата: «speech to text startups will end, not with a bang, but a whisper». Поэма Элиота The Hollow Men заканчивается: «This is the way the world ends not with a bang but a whimper».",
+  "source": "Twitter, OpenAI Research",
+  "author": "Евгений Миротин",
+  "tournament": "Кубок Дисгармонии — 5. Хаотистский дрифт",
+  "difficulty": "hard"
+ },
+ {
+  "id": 168,
+  "question": "В этом вопросе мы заменили словами ПРОИСХОДИТ ЭТО несколько слов. Майкл Векс пишет, что, когда ПРОИСХОДИТ ЭТО, евреи не сочиняют изощренных ругательств, а просто говорят: «Да будет его имя стёрто». Вероятность, что ПРОИЗОЙДЕТ ЭТО, описывает правило. Как это правило называется?",
+  "answer": "закон Годвина.",
+  "acceptable": "Godwin's Law, принцип Годвина, правило Годвина.",
+  "comment": "в отличие от цветистых, но не вполне серьёзных проклятий, на того, кому и впрямь желают смерти, евреи не тратят времени и слов. Словами ПРОИСХОДИТ ЭТО мы заменили слова «кто-то упоминает Гитлера». Вероятность, что по ходу интернет-дискуссии кто-то упомянет Гитлера, американский юрист Майк Годвин оценил в единицу.",
+  "source": "Векс М. Жизнь как квеч. Идиш: язык и культура; https://en.wikipedia.org/wiki/Godwin's_law.",
+  "author": "Михаил Малкин",
+  "tournament": "Сова бьян — 2024",
+  "difficulty": "hard"
+ },
+ {
+  "id": 169,
+  "question": "В книге «Чистый вымысел» рассказывается, как геймдизайнеру Сигэру Миямото пришла в голову идея игры «Марио». Офис, где Миямото работал, располагался в здании бывшей бумажной фабрики, часть оборудования которой приспособили для нужд сотрудников. Поэтому у Миямото на работе была своя ОНА. Назовите ЕЕ словом с удвоенной согласной.",
+  "answer": "ванна.",
+  "acceptable": "ванная.",
+  "comment": "как Архимед, Миямото нашел гениальное решение прямо в ванне. Для ее подогрева использовали пар от бойлеров, который прежде был нужен для производства бумаги. Символично, что Марио, которого придумал Миямото, получил профессию водопроводчика.",
+  "source": "Альт М. Чистый вымысел. За что мы любим Японию.",
+  "author": "Михаил Малкин",
+  "tournament": "Сова бьян — 2024",
+  "difficulty": "hard"
+ },
+ {
+  "id": 170,
+  "question": "В докладе 1947 года этот человек предложил использовать две комнаты, двух не очень сильных игроков в шахматы и оператора. Назовите этого человека.",
+  "answer": "Тьюринг",
+  "acceptable": "",
+  "comment": "в этом раннем прототипе своего теста Тьюринг предлагал человеку определить, играет ли он с машиной, или с другим человеком. Оператор ЭВМ, а не видео-.",
+  "source": "https://ru.wikipedia.org/wiki/Тест_Тьюринга",
+  "author": "Евгений Миротин",
+  "tournament": "Octobearfest — 2017",
+  "difficulty": "hard"
+ },
+ {
+  "id": 171,
+  "question": "Узо — алкогольный напиток с анисом и пряностями. История, объясняющая появление названия «Узо 12», похожа на историю появления в 1920-х годах другой торговой марки. Какой?",
+  "answer": "Chanel № 5",
+  "acceptable": "",
+  "comment": "за счёт разных комбинаций пряностей получаются различные вкусы. Марка получила название потому, что в первой партии лучший напиток оказался в бочонке под номером 12.",
+  "source": "",
+  "author": "Евгений Миротин",
+  "tournament": "Octobearfest — 2017",
+  "difficulty": "hard"
+ },
+ {
+  "id": 172,
+  "question": "Один из видов кальмаров обитает на глубине более пятисот метров. В случае опасности он выпускает ТАКУЮ слизь. Какую ТАКУЮ?",
+  "answer": "светящуюся.",
+  "acceptable": "люминесцентную; хемилюминесцентную; сияющую.",
+  "comment": "на такую глубину свет не проникает, поэтому выпускать «чернила», как остальные кальмары, бесполезно. Кальмар под названием «Адский вампир» дезориентирует хищника световым пятном.",
+  "source": "",
+  "author": "Денис Рыбачук (Брест)",
+  "tournament": "Octobearfest — 2019",
+  "difficulty": "hard"
+ },
+ {
+  "id": 173,
+  "question": "Во время Второй мировой войны некоторые советские танкисты сражались на немецкой технике. Майор Коровин назвал этих танкистов ИКСАМИ. Кто написал «ИКСА»?",
+  "answer": "Шота Руставели.",
+  "acceptable": "по фамилии.",
+  "comment": "советским танкистам приходилось воевать на захваченных «Тиграх». «Витязь в тигровой шкуре» — эпическая поэма Шоты Руставели.",
+  "source": "",
+  "author": "Андрей Рожков (Жлобин)",
+  "tournament": "Octobearfest — 2019",
+  "difficulty": "hard"
+ },
+ {
+  "id": 174,
+  "question": "Если почки дерева откроются, например, во время зимней оттепели, а заморозки случатся снова, это может быть опасным для растения. Бернд ХАйнрих пишет, что деревья за время эволюции научились не обманываться ИМ. Назовите ЕГО словом иностранного происхождения.",
+  "answer": "фальстарт",
+  "acceptable": "",
+  "comment": "слишком раннее цветение может быть губительным для растений. Мы начинаем зеркало командных интеллектуальных игр на скорость без фальстартов:)",
+  "source": "Б. Хайнрих. Зима.",
+  "author": "Мария Подрядчикова",
+  "tournament": "Кнопочки",
+  "difficulty": "hard"
+ },
+ {
+  "id": 175,
+  "question": "Герой романа ФлАнна О'БрАйена рассказывал, что на хорошее приглашение обычно приходятся куда больше плохих, поэтому он принял рациональное решение поступать определённым образом. Герой какого фильма 2008 года был обречен поступать противоположным образом?",
+  "answer": "«Всегда говори „да“»",
+  "acceptable": "Yes Man",
+  "comment": "",
+  "source": "",
+  "author": "",
+  "tournament": "Кнопочки",
+  "difficulty": "hard"
+ },
+ {
+  "id": 176,
+  "question": "Недавно Департамент транспорта Москвы представил карту для Counter Strike, представляющую собой станцию метро. Название этой станции получено добавлением греческой приставки к названию реально существующей станции. Какое название получилось?",
+  "answer": "Киберспортивная",
+  "acceptable": "",
+  "comment": "В СССР очень любили спорт и немного любили строить метро. Станция «Спортивная» есть в Москве, Санкт-Петербурге, Новосибирске, Самаре, Харькове и Минске.",
+  "source": "cybersport.ru",
+  "author": "Матвей Гомон",
+  "tournament": "Кнопочки",
+  "difficulty": "hard"
+ }
+];
+/* QUESTIONS_END */
+
+/* =========================================================================
+   2. СОСТОЯНИЕ
+   ========================================================================= */
+const STORAGE_KEY = 'chgk_host_state_v1';
+
+function freshState(){
+  return {
+    phase:'setup',
+    roundPhase:'intro',
+    teamName:'',
+    timerDuration:60,
+    questions:[],
+    currentIndex:0,
+    activeSlot:null,
+    scoreExperts:0,
+    scoreViewers:0,
+    results:[],
+    playedQuestionIds:[],
+    playedBonusIndexes:[],
+    wheelRotation:0,
+    remainingNumbers:[],
+    timeDebt:0,
+    justResetPool:false,
+    justResetBonusPool:false,
+    currentBonus:null,
+    early:false,
+    earlySeconds:null,
+    undoSnapshot:null,
+  };
+}
+
+let state = freshState();
+
+function safeLoad(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const saved = JSON.parse(raw);
+    if(saved && typeof saved === 'object'){
+      state = Object.assign(freshState(), saved);
+      // никогда не восстанавливаем игру "в процессе" с активным таймером - только пройденный прогресс
+      if(state.phase === 'round'){
+        // безопасно вернуть на экран настройки, чтобы не тащить сломанный таймер между сессиями
+        if(state.roundPhase === 'timerRunning' || state.roundPhase === 'timerPaused'){
+          state.roundPhase = 'question';
+        }
+      }
+    }
+  }catch(e){ /* localStorage недоступен - остаёмся на in-memory состоянии */ }
+}
+function safeSave(){
+  try{
+    const {undoSnapshot, ...toSave} = state;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  }catch(e){ /* best-effort, игнорируем */ }
+}
+
+/* =========================================================================
+   3. ЗВУК (Web Audio API, без внешних файлов)
+   ========================================================================= */
+let audioCtx = null;
+function ensureAudio(){
+  try{
+    if(!audioCtx){
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new Ctx();
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+  }catch(e){ /* звук недоступен - игра продолжается без него */ }
+  return audioCtx;
+}
+function tone(freq, startAt, dur, opts){
+  opts = opts || {};
+  if(!audioCtx) return;
+  try{
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = opts.type || 'sine';
+    osc.frequency.value = freq;
+    const peak = opts.peak != null ? opts.peak : 0.22;
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(peak, startAt + (opts.attack || 0.02));
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + (opts.decay != null ? opts.decay : 0.5));
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(startAt);
+    osc.stop(startAt + (opts.decay != null ? opts.decay : 0.5) + 0.05);
+  }catch(e){}
+}
+function playStartTone(){
+  const ctx = ensureAudio(); if(!ctx) return;
+  const t = ctx.currentTime;
+  tone(880, t, 0.15, {decay:0.16, peak:0.2});
+  tone(1320, t + 0.09, 0.14, {decay:0.14, peak:0.14});
+}
+function playTick(){
+  const ctx = ensureAudio(); if(!ctx) return;
+  tone(660, ctx.currentTime, 0.06, {decay:0.08, peak:0.08});
+}
+function playEndGong(){
+  const ctx = ensureAudio(); if(!ctx) return;
+  const t = ctx.currentTime;
+  [220, 330, 440].forEach((f,i)=>{
+    tone(f, t + i*0.03, 1.6, {type:'triangle', decay:1.7, peak:0.18, attack:0.01});
+  });
+}
+
+/* =========================================================================
+   4. ХЕЛПЕРЫ
+   ========================================================================= */
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function nl2br(s){ return esc(s).replace(/\n+/g,'<br>'); }
+
+/* =========================================================================
+   5. СБОРКА ИГРЫ
+   ========================================================================= */
+function drawGame(){
+  let pool = QUESTIONS.filter(q => state.playedQuestionIds.indexOf(q.id) === -1);
+  let poolReset = false;
+  if(pool.length < 12){
+    state.playedQuestionIds = [];
+    pool = QUESTIONS.slice();
+    poolReset = true;
+  }
+  const chosen = shuffle(pool).slice(0, Math.min(12, pool.length));
+  const cities = shuffle(CITIES);
+  const senders = shuffle(SENDERS);
+
+  state.questions = chosen.map((q, i) => ({
+    ...q,
+    _city: q.city || cities[i % cities.length],
+    _sender: q.sender || senders[i % senders.length],
+    _playNumber: i + 1,
+  }));
+  state.currentIndex = 0;
+  state.activeSlot = null;
+  state.scoreExperts = 0;
+  state.scoreViewers = 0;
+  state.results = [];
+  state.remainingNumbers = state.questions.map((_,i)=>i+1);
+  state.timeDebt = 0;
+  state.currentBonus = null;
+  state.early = false;
+  state.earlySeconds = null;
+  state.undoSnapshot = null;
+  state.phase = 'round';
+  state.roundPhase = 'intro';
+  state.justResetPool = poolReset;
+  safeSave();
+}
+
+function newGamePreservingHistory(){
+  drawGame();
+}
+
+/* =========================================================================
+   6. ВОЛЧОК
+   ========================================================================= */
+const SECTOR_COUNT = 13;
+function sectorAngle(n){ // n: 1..12 обычный номер, 13 = бонус
+  const idx = (n === 13) ? 12 : (n - 1);
+  return idx * (360 / SECTOR_COUNT);
+}
+function spinTo(targetNumber){
+  const targetAngle = sectorAngle(targetNumber);
+  const current = state.wheelRotation % 360;
+  let delta = targetAngle - current;
+  delta = ((delta % 360) + 360) % 360;
+  const extraSpins = 4 + Math.floor(Math.random()*3); // 4-6 полных оборотов
+  const newRotation = state.wheelRotation + extraSpins*360 + delta;
+  state.wheelRotation = newRotation;
+  const arrow = document.getElementById('wheel-arrow');
+  if(arrow){ arrow.style.transform = `rotate(${newRotation}deg)`; }
+}
+
+function chooseLanding(){
+  const options = state.remainingNumbers.slice();
+  options.push(13);
+  return options[Math.floor(Math.random()*options.length)];
+}
+
+let spinLock = false;
+function onSpinClick(){
+  if(spinLock) return;
+  spinLock = true;
+  ensureAudio();
+  const landing = chooseLanding();
+  spinTo(landing);
+  const arrow = document.getElementById('wheel-arrow');
+  const onEnd = () => {
+    arrow.removeEventListener('transitionend', onEnd);
+    spinLock = false;
+    if(landing === 13){
+      handleBonusLanding();
+    }else{
+      state.remainingNumbers = state.remainingNumbers.filter(n => n !== landing);
+      state.activeSlot = landing;
+      state.roundPhase = 'flavor';
+      safeSave();
+      render();
+    }
+  };
+  if(arrow) arrow.addEventListener('transitionend', onEnd, {once:true});
+  const btn = document.getElementById('btn-spin');
+  if(btn) btn.setAttribute('disabled','disabled');
+}
+
+function handleBonusLanding(){
+  let pool = BONUS_QUESTIONS.map((q,i)=>i).filter(i => state.playedBonusIndexes.indexOf(i) === -1);
+  if(pool.length === 0){
+    state.playedBonusIndexes = [];
+    pool = BONUS_QUESTIONS.map((q,i)=>i);
+  }
+  const idx = pool[Math.floor(Math.random()*pool.length)];
+  state.playedBonusIndexes.push(idx);
+  state.currentBonus = BONUS_QUESTIONS[idx];
+  state.roundPhase = 'bonus';
+  safeSave();
+  render();
+}
+
+function afterBonus(){
+  state.currentBonus = null;
+  state.roundPhase = 'intro';
+  safeSave();
+  render();
+}
+
+/* =========================================================================
+   7. ТАЙМЕР
+   ========================================================================= */
+const timerState = { endsAt:null, remainingMs:null, running:false, rafId:null, durationMs:60000 };
+
+function currentQuestionDurationSec(){
+  const base = state.timerDuration;
+  if(state.timeDebt > 0){
+    return Math.max(20, base - state.timeDebt);
+  }
+  return base;
+}
+
+function startTimer(){
+  const durSec = currentQuestionDurationSec();
+  timerState.durationMs = durSec*1000;
+  timerState.remainingMs = timerState.durationMs;
+  timerState.endsAt = performance.now() + timerState.remainingMs;
+  timerState.running = true;
+  playStartTone();
+  state.roundPhase = 'timerRunning';
+  render();
+  tickLoop();
+}
+function pauseTimer(){
+  if(!timerState.running) return;
+  timerState.remainingMs = Math.max(0, timerState.endsAt - performance.now());
+  timerState.running = false;
+  if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  state.roundPhase = 'timerPaused';
+  render();
+}
+function resumeTimer(){
+  timerState.endsAt = performance.now() + timerState.remainingMs;
+  timerState.running = true;
+  state.roundPhase = 'timerRunning';
+  render();
+  tickLoop();
+}
+function extendTimerCredit(){
+  if(!timerState.running && !timerState.endsAt) return;
+  const hasFuture = state.remainingNumbers.length > 0;
+  if(!hasFuture) return;
+  timerState.endsAt += 60000;
+  timerState.durationMs += 60000;
+  if(!timerState.running){ timerState.remainingMs += 60000; }
+  state.timeDebt += 30;
+  safeSave();
+  render();
+  // цикл tickLoop уже запущен (если таймер идёт) и сам подхватит новые значения
+  // на следующем кадре — повторный запуск создал бы дублирующийся rAF-цикл.
+}
+let tickedLastSeconds = null;
+function tickLoop(){
+  if(!timerState.running) return;
+  const remaining = timerState.endsAt - performance.now();
+  if(remaining <= 0){
+    updateTimerDOM(false, 0);
+    timerState.running = false;
+    tickedLastSeconds = null;
+    playEndGong();
+    state.roundPhase = 'answer-ready'; // истекло, но ответ ещё не открыт
+    renderTimerDoneState();
+    return;
+  }
+  const secsLeft = Math.ceil(remaining/1000);
+  if(secsLeft <= 5 && secsLeft !== tickedLastSeconds){
+    tickedLastSeconds = secsLeft;
+    playTick();
+  }
+  updateTimerDOM(true, remaining);
+  timerState.rafId = requestAnimationFrame(tickLoop);
+}
+function updateTimerDOM(running, remainingMsOverride){
+  const digits = document.getElementById('timer-digits');
+  const ring = document.getElementById('timer-ring-fg');
+  if(!digits || !ring) return;
+  const remaining = remainingMsOverride != null ? remainingMsOverride : Math.max(0, timerState.endsAt - performance.now());
+  const secs = Math.max(0, Math.ceil(remaining/1000));
+  const mm = String(Math.floor(secs/60)).padStart(2,'0');
+  const ss = String(secs%60).padStart(2,'0');
+  digits.textContent = `${mm}:${ss}`;
+  const frac = Math.max(0, Math.min(1, remaining / timerState.durationMs));
+  const circumference = 2*Math.PI*54;
+  ring.style.strokeDasharray = `${circumference}`;
+  ring.style.strokeDashoffset = `${circumference*(1-frac)}`;
+  ring.classList.remove('warn','danger');
+  digits.classList.remove('danger');
+  if(secs <= 10){ ring.classList.add('danger'); digits.classList.add('danger'); }
+  else if(secs <= 20){ ring.classList.add('warn'); }
+}
+function stopEarly(){
+  if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  timerState.running = false;
+  const remaining = Math.max(0, (timerState.endsAt||performance.now()) - performance.now());
+  const elapsedSec = Math.round((timerState.durationMs - remaining)/1000);
+  state.early = true;
+  state.earlySeconds = elapsedSec;
+  state.roundPhase = 'answer-ready';
+  safeSave();
+  render();
+}
+function revealAnswer(){
+  if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  timerState.running = false;
+  if(state.timeDebt > 0) state.timeDebt = 0;
+  state.roundPhase = 'answer';
+  safeSave();
+  render();
+}
+function renderTimerDoneState(){
+  state.roundPhase = 'answer-ready';
+  render();
+}
+
+/* =========================================================================
+   8. СЧЁТ / ПЕРЕХОДЫ
+   ========================================================================= */
+function scoreRound(correct){
+  state.undoSnapshot = {
+    scoreExperts: state.scoreExperts,
+    scoreViewers: state.scoreViewers,
+    results: state.results.slice(),
+  };
+  if(correct) state.scoreExperts++; else state.scoreViewers++;
+  const q = state.questions[state.activeSlot - 1];
+  state.results.push({
+    questionId: q.id,
+    question: q.question,
+    correct: correct,
+    early: state.early,
+    earlySeconds: state.earlySeconds,
+  });
+  state.early = false;
+  state.earlySeconds = null;
+  state.roundPhase = 'scored';
+  safeSave();
+  render();
+}
+function undoScore(){
+  if(!state.undoSnapshot) return;
+  state.scoreExperts = state.undoSnapshot.scoreExperts;
+  state.scoreViewers = state.undoSnapshot.scoreViewers;
+  state.results = state.undoSnapshot.results;
+  state.undoSnapshot = null;
+  state.roundPhase = 'answer';
+  safeSave();
+  render();
+}
+function isGameOver(){
+  return state.scoreExperts >= 6 || state.scoreViewers >= 6 || state.currentIndex >= state.questions.length - 1;
+}
+function nextRound(){
+  state.undoSnapshot = null;
+  if(isGameOver()){
+    // отметить все сыгранные вопросы как played для будущих игр
+    state.questions.forEach(q => {
+      if(state.playedQuestionIds.indexOf(q.id) === -1) state.playedQuestionIds.push(q.id);
+    });
+    state.phase = 'summary';
+    safeSave();
+    render();
+    return;
+  }
+  state.currentIndex++;
+  state.activeSlot = null;
+  state.roundPhase = 'intro';
+  safeSave();
+  render();
+}
+function backToSetup(){
+  state = freshState();
+  // сохраняем историю сыгранных вопросов между переходами на экран настройки не нужно - drawGame сам управляет
+  const saved = (()=>{ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); }catch(e){ return null; } })();
+  if(saved){
+    state.playedQuestionIds = saved.playedQuestionIds || [];
+    state.playedBonusIndexes = saved.playedBonusIndexes || [];
+    state.wheelRotation = saved.wheelRotation || 0;
+  }
+  safeSave();
+  render();
+}
+
+/* =========================================================================
+   9. РЕНДЕР
+   ========================================================================= */
+function owlSVG(){
+  return document.getElementById('tpl-owl').innerHTML;
+}
+
+function render(){
+  const app = document.getElementById('app');
+  let html = '';
+  if(state.phase === 'setup') html = renderSetup();
+  else if(state.phase === 'round') html = renderRound();
+  else html = renderSummary();
+  app.innerHTML = html;
+  attachEvents();
+  if(state.phase === 'round' && (state.roundPhase === 'timerRunning' || state.roundPhase === 'timerPaused')){
+    // восстановление визуального состояния таймера при перерисовке во время хода
+    const remaining = state.roundPhase === 'timerPaused' ? timerState.remainingMs : undefined;
+    updateTimerDOM(true, remaining);
+  }
+}
+
+function renderSetup(){
+  const total = QUESTIONS.length;
+  const remaining = total - state.playedQuestionIds.length;
+  return `
+  <div class="wrap">
+    <header class="top">${owlSVG()}<h1>Что? Где? Когда?</h1></header>
+    <div class="card">
+      <h2 class="section-title">Настройка игры</h2>
+      <label class="field-label" for="in-team">Название команды (необязательно)</label>
+      <input type="text" id="in-team" placeholder="Знатоки" value="${esc(state.teamName)}">
+      <label class="field-label" for="in-timer">Время на обсуждение, секунд</label>
+      <input type="number" id="in-timer" min="15" max="180" step="5" value="${state.timerDuration}">
+      <div class="setup-stack">
+        <button class="btn btn-gold btn-block" id="btn-draw" style="margin-top:20px;">🎲 Собрать игру — 12 вопросов</button>
+      </div>
+      <div class="pool-stat">В базе ${total} вопросов · сыграно ${state.playedQuestionIds.length} · осталось ${Math.max(0,remaining)}${remaining < 12 ? ' — начнётся новый круг' : ''}</div>
+    </div>
+    <p class="muted center" style="margin-top:16px;">Классика: «Знатоки» против «Телезрителей», игра до 6 очков или 12 вопросов.<br>На волчке 13 секторов — 13-й дарит бонусный вопрос без риска для счёта.</p>
+  </div>`;
+}
+
+function renderScoreboard(){
+  return `
+  <div class="round-counter">Вопрос ${state.currentIndex+1} из ${state.questions.length}${state.teamName ? ' · ' + esc(state.teamName) : ''}</div>
+  <div class="scoreboard">
+    <div class="score-side experts"><div class="label">Знатоки</div><div class="num">${state.scoreExperts}</div></div>
+    <div class="score-mid">:</div>
+    <div class="score-side viewers"><div class="label">Телезрители</div><div class="num">${state.scoreViewers}</div></div>
+  </div>`;
+}
+
+function renderWheel(){
+  let nums = '';
+  for(let i=1;i<=12;i++){
+    nums += `<div class="wheel-num" style="--i:${i-1}">${i}</div>`;
+  }
+  nums += `<div class="wheel-num b13" style="--i:12">13</div>`;
+  return `
+  <div class="wheel-zone">
+    <div class="wheel-outer">
+      <div class="wheel-face"></div>
+      ${nums}
+      <div class="wheel-arrow" id="wheel-arrow" style="transform:rotate(${state.wheelRotation}deg)"></div>
+      <div class="wheel-hub"></div>
+    </div>
+    <button class="btn btn-gold" id="btn-spin">🎡 Крутить волчок</button>
+  </div>`;
+}
+
+function renderRound(){
+  const q = state.questions[state.activeSlot - 1];
+  const rp = state.roundPhase;
+  let body = '';
+
+  if(rp === 'intro'){
+    body = renderWheel();
+  } else if(rp === 'bonus'){
+    const b = state.currentBonus;
+    body = `
+    <div class="card flavor-card">
+      <div class="from" style="color:#ffd76a;">✨ СЕКТОР №13 — бонусный вопрос</div>
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <div class="question-text">${nl2br(b.question)}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-bonus-answer">Показать ответ</button>
+    </div>`;
+  } else if(rp === 'bonus-answer'){
+    const b = state.currentBonus;
+    body = `
+    <div class="card flavor-card">
+      <div class="from" style="color:#ffd76a;">✨ СЕКТОР №13</div>
+    </div>
+    <div class="card answer-block" style="margin-top:12px;">
+      <div class="answer-label">Ответ</div>
+      <div class="answer-text">${esc(b.answer)}</div>
+      ${b.comment ? `<div class="comment-text">${nl2br(b.comment)}</div>` : ''}
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-bonus-continue">Крутить волчок дальше →</button>
+    </div>`;
+  } else if(rp === 'flavor'){
+    body = `
+    <div class="card flavor-card">
+      <div class="from">Вопрос ${q._sender.verb} ${q._sender.name}</div>
+      <div class="city">из города ${q._city}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-read-question">📖 Читать вопрос</button>
+    </div>`;
+  } else if(rp === 'question'){
+    body = `
+    <div class="card">
+      <div class="question-text">${nl2br(q.question)}</div>
+      <div class="qmeta">Выпал номер ${q._playNumber} на волчке${state.timeDebt>0 ? ` · время сокращено на ${state.timeDebt} сек (минута в кредит)` : ''}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-start-timer">⏱ Начать отсчёт — ${currentQuestionDurationSec()} сек</button>
+    </div>`;
+  } else if(rp === 'timerRunning' || rp === 'timerPaused'){
+    const paused = rp === 'timerPaused';
+    body = `
+    <div class="card">
+      <div class="question-text" style="font-size:clamp(15px,4vw,17px); opacity:.85;">${nl2br(q.question)}</div>
+    </div>
+    <div class="timer-zone">
+      <div class="timer-ring-wrap">
+        <svg viewBox="0 0 120 120">
+          <circle class="timer-ring-bg" cx="60" cy="60" r="54"/>
+          <circle class="timer-ring-fg" id="timer-ring-fg" cx="60" cy="60" r="54"/>
+        </svg>
+        <div class="timer-digits" id="timer-digits">--:--</div>
+      </div>
+      ${state.timeDebt>0 ? `<div class="debt-note">−${state.timeDebt} сек за «минуту в кредит»</div>` : ''}
+    </div>
+    <div class="action-bar">
+      <div class="secondary-row">
+        <button class="btn btn-outline" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
+        <button class="btn btn-outline" id="btn-credit-minute" ${state.remainingNumbers.length===0 ? 'disabled' : ''}>+1 мин в кредит</button>
+      </div>
+      <button class="btn btn-gold btn-block" id="btn-early-answer">🔔 Досрочный ответ</button>
+    </div>`;
+  } else if(rp === 'answer-ready'){
+    body = `
+    <div class="card">
+      <div class="question-text" style="font-size:clamp(15px,4vw,17px); opacity:.85;">${nl2br(q.question)}</div>
+    </div>
+    <div class="card center" style="margin-top:12px;">
+      <div class="muted">${state.early ? `Ответ дан досрочно — за ${state.earlySeconds} сек` : 'Время вышло!'}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-reveal-answer">Показать ответ</button>
+    </div>`;
+  } else if(rp === 'answer'){
+    const attrBits = [];
+    if(q.author) attrBits.push('Автор: ' + esc(q.author));
+    if(q.tournament) attrBits.push('Из турнира «' + esc(q.tournament) + '»');
+    if(q.source) attrBits.push('Источник: ' + esc(q.source));
+    body = `
+    <div class="card answer-block">
+      <div class="answer-label">Ответ</div>
+      <div class="answer-text">${esc(q.answer)}</div>
+      ${q.acceptable ? `<div class="accept-text">Засчитывать также: ${esc(q.acceptable)}</div>` : ''}
+      ${q.comment ? `<div class="comment-text">${nl2br(q.comment)}</div>` : ''}
+      ${attrBits.length ? `<div class="attribution">${attrBits.join('<br>')}</div>` : ''}
+    </div>
+    <div class="score-buttons">
+      <button class="btn btn-experts" id="btn-score-experts">✅<br><small>Знатоки</small></button>
+      <button class="btn btn-viewers" id="btn-score-viewers">❌<br><small>Телезрители</small></button>
+    </div>`;
+  } else if(rp === 'scored'){
+    const last = state.results[state.results.length-1];
+    body = `
+    <div class="card center">
+      <div class="muted" style="margin-bottom:8px;">Засчитано: ${last.correct ? '✅ Знатокам' : '❌ Телезрителям'}</div>
+      <div class="final-score" style="padding:2px 0;">
+        <div class="big">${state.scoreExperts} : ${state.scoreViewers}</div>
+      </div>
+    </div>
+    <div class="undo-bar">
+      <button class="btn btn-ghost btn-sm" id="btn-undo">↩ Отменить</button>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-next-round">${isGameOver() ? 'Показать итоги →' : 'Следующий вопрос →'}</button>
+    </div>`;
+  }
+
+  return `
+  <div class="wrap">
+    <header class="top">${owlSVG()}<h1>Что? Где? Когда?</h1></header>
+    ${renderScoreboard()}
+    ${body}
+  </div>`;
+}
+
+function renderSummary(){
+  const winner = state.scoreExperts > state.scoreViewers ? 'Знатоки' : (state.scoreViewers > state.scoreExperts ? 'Телезрители' : 'Ничья');
+  const rows = state.results.map((r,i) => `
+    <div class="result-row">
+      <span class="dot ${r.correct?'ok':'no'}"></span>
+      <span class="qn">${i+1}.</span>
+      <span class="qt">${esc(r.question).slice(0,80)}${r.question.length>80?'…':''}</span>
+    </div>`).join('');
+  return `
+  <div class="wrap">
+    <header class="top">${owlSVG()}<h1>Что? Где? Когда?</h1></header>
+    <div class="card final-score">
+      <div class="muted" style="margin-bottom:6px;">Игра окончена</div>
+      <div class="big">${state.scoreExperts} : ${state.scoreViewers}</div>
+      <div class="who">Победили: ${winner}</div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <h2 class="section-title">Все вопросы игры</h2>
+      <div class="result-list">${rows}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-new-game">🎲 Новая игра</button>
+      <button class="btn btn-outline btn-block" id="btn-to-setup">Настройки</button>
+    </div>
+  </div>`;
+}
+
+/* =========================================================================
+   10. СОБЫТИЯ
+   ========================================================================= */
+function once(id, fn){
+  const el = document.getElementById(id);
+  if(el) el.addEventListener('click', function handler(e){
+    el.removeEventListener('click', handler);
+    fn(e);
+  });
+}
+function attachEvents(){
+  once('btn-draw', () => {
+    const teamEl = document.getElementById('in-team');
+    const timerEl = document.getElementById('in-timer');
+    state.teamName = teamEl ? teamEl.value.trim() : '';
+    const t = timerEl ? parseInt(timerEl.value,10) : 60;
+    state.timerDuration = (t && t>=10 && t<=300) ? t : 60;
+    drawGame();
+    render();
+  });
+  once('btn-spin', onSpinClick);
+  once('btn-bonus-answer', () => { state.roundPhase = 'bonus-answer'; render(); });
+  once('btn-bonus-continue', afterBonus);
+  once('btn-read-question', () => { state.roundPhase = 'question'; safeSave(); render(); });
+  once('btn-start-timer', startTimer);
+  once('btn-pause-resume', () => { timerState.running ? pauseTimer() : resumeTimer(); });
+  once('btn-credit-minute', extendTimerCredit);
+  once('btn-early-answer', stopEarly);
+  once('btn-reveal-answer', revealAnswer);
+  once('btn-score-experts', () => scoreRound(true));
+  once('btn-score-viewers', () => scoreRound(false));
+  once('btn-undo', undoScore);
+  once('btn-next-round', nextRound);
+  once('btn-new-game', () => { drawGame(); render(); });
+  once('btn-to-setup', backToSetup);
+}
+
+/* =========================================================================
+   11. ИНИЦИАЛИЗАЦИЯ
+   ========================================================================= */
+safeLoad();
+if(state.phase !== 'setup'){
+  // при обновлении страницы посреди игры - безопаснее вернуться к настройке,
+  // но сохраняем накопленную историю сыгранных вопросов и счётчик волчка
+  const played = state.playedQuestionIds;
+  const playedBonus = state.playedBonusIndexes;
+  const wheel = state.wheelRotation;
+  state = freshState();
+  state.playedQuestionIds = played;
+  state.playedBonusIndexes = playedBonus;
+  state.wheelRotation = wheel;
+}
+render();
+</script>
+</body>
+</html>
