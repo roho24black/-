@@ -152,6 +152,8 @@
   .wedge-a{ fill:#173722; }
   .wedge-b{ fill:#0f2517; }
   .wedge-13{ fill:url(#wedge13Grad); stroke:var(--gold-light); stroke-width:1.6; }
+  .wedge-blitz{ fill:url(#wedgeBlitzGrad); stroke:#a8f0f5; stroke-width:1.6; }
+  .wedge-super{ fill:url(#wedgeSuperGrad); stroke:#ffc4bd; stroke-width:1.6; }
   .wedge-played{ opacity:.4; }
   .wheel-tick{ stroke:var(--gold-dim); stroke-width:1; opacity:.65; }
   .wheel-tick-major{ stroke:var(--gold-light); stroke-width:1.4; opacity:.85; }
@@ -161,6 +163,7 @@
     paint-order:stroke; stroke:rgba(0,0,0,.35); stroke-width:2px;
   }
   .wheel-num-label.b13{ fill:#2a1c05; font-size:15px; font-weight:800; stroke:none; }
+  .wheel-num-label.special{ font-size:17px; stroke:none; }
   .wheel-num-label.played{ fill:#6b6455; font-size:17px; stroke:rgba(0,0,0,.25); }
   .wheel-gloss{ fill:url(#glossGrad); pointer-events:none; }
   .wheel-arrow-g{
@@ -2458,7 +2461,9 @@ function freshState(){
     playedQuestionIds:[],
     wheelRotation:0,
     remainingNumbers:[],
-    timeDebt:0,
+    creditMinuteUsedThisRound:false,
+    creditMinuteDebt:false,
+    zeroDiscussionNext:false,
     usedBonusMinute:false,
     bonusSecondsUsed:null,
     blitz:null,
@@ -2617,7 +2622,9 @@ function drawGame(){
   state.scoreViewers = 0;
   state.results = [];
   state.remainingNumbers = questions.map(q => q._playNumber);
-  state.timeDebt = 0;
+  state.creditMinuteUsedThisRound = false;
+  state.creditMinuteDebt = false;
+  state.zeroDiscussionNext = false;
   state.usedBonusMinute = false;
   state.bonusSecondsUsed = null;
   state.blitz = null;
@@ -2703,16 +2710,15 @@ function onSpinClick(){
    ========================================================================= */
 const timerState = { endsAt:null, remainingMs:null, running:false, rafId:null, durationMs:60000 };
 
-function currentQuestionDurationSec(){
-  const base = state.timerDuration;
-  if(state.timeDebt > 0){
-    return Math.max(20, base - state.timeDebt);
-  }
-  return base;
+function isZeroDiscussionRound(){
+  // счёт 5:5 - ведущий по регламенту принудительно забирает минуту на
+  // обсуждение; то же самое происходит, если команда уже должна "вернуть"
+  // взятую ранее минуту в кредит (см. requestCreditMinute)
+  return state.zeroDiscussionNext || (state.scoreExperts === 5 && state.scoreViewers === 5);
 }
 
 function startTimer(){
-  const durSec = currentQuestionDurationSec();
+  const durSec = state.timerDuration;
   timerState.durationMs = durSec*1000;
   timerState.remainingMs = timerState.durationMs;
   timerState.endsAt = performance.now() + timerState.remainingMs;
@@ -2740,18 +2746,26 @@ function resumeTimer(){
   render();
   tickLoop();
 }
-function extendTimerCredit(){
-  if(!timerState.running && !timerState.endsAt) return;
-  const hasFuture = state.remainingNumbers.length > 0;
-  if(!hasFuture) return;
-  timerState.endsAt += 60000;
-  timerState.durationMs += 60000;
-  if(!timerState.running){ timerState.remainingMs += 60000; }
-  state.timeDebt += 30;
+// «Минута в кредит» (регламент, п. 1.6): доступна капитану команды, только
+// когда знатоки проигрывают со счётом Х:5, и только после того как основная
+// минута на обсуждение уже истекла. Если эта дополнительная минута помогла
+// выиграть раунд - её нужно вернуть: один из следующих раундов (или весь
+// блиц/суперблиц) команда играет уже без обсуждения.
+function creditMinuteEligible(){
+  return state.scoreViewers === 5 && state.scoreExperts < 5 && !state.creditMinuteUsedThisRound;
+}
+function requestCreditMinute(){
+  if(!creditMinuteEligible()) return;
+  state.creditMinuteUsedThisRound = true;
+  timerState.durationMs = 60000;
+  timerState.remainingMs = 60000;
+  timerState.endsAt = performance.now() + 60000;
+  timerState.running = true;
+  state.roundPhase = 'timerRunning';
+  playStartTone();
   safeSave();
   render();
-  // цикл tickLoop уже запущен (если таймер идёт) и сам подхватит новые значения
-  // на следующем кадре — повторный запуск создал бы дублирующийся rAF-цикл.
+  tickLoop();
 }
 let tickedLastSeconds = null;
 function tickLoop(){
@@ -2832,7 +2846,13 @@ function finalizeBonusMinute(){
 function revealAnswer(){
   if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
   timerState.running = false;
-  if(state.timeDebt > 0) state.timeDebt = 0;
+  state.roundPhase = 'answer';
+  safeSave();
+  render();
+}
+// Раунд без обсуждения (см. isZeroDiscussionRound) - вопрос уже прочитан,
+// обсуждать нечего, сразу переходим к ответу.
+function skipDiscussion(){
   state.roundPhase = 'answer';
   safeSave();
   render();
@@ -2905,6 +2925,7 @@ function scoreBlitzRound(){
     + (state.blitz.player ? ' — ' + state.blitz.player : '')
     + ` (${correctCount}/${state.blitz.results.length})`;
   state.results.push({ questionId: 'sp' + state.activeSlot, question: label, correct: won });
+  state.zeroDiscussionNext = false; // если это был возврат "минуты в кредит" - долг погашен
   state.roundPhase = 'scored';
   safeSave();
   render();
@@ -2932,6 +2953,11 @@ function scoreRound(correct){
     usedBonusMinute: state.usedBonusMinute,
     bonusSecondsUsed: state.bonusSecondsUsed,
   });
+  // «минута в кредит» помогла выиграть раунд - команда должна её вернуть
+  // (следующий раунд играется без обсуждения, регламент п. 1.6.3)
+  if(correct && state.creditMinuteUsedThisRound) state.creditMinuteDebt = true;
+  state.creditMinuteUsedThisRound = false;
+  state.zeroDiscussionNext = false; // если это был возврат долга - он погашен
   state.usedBonusMinute = false;
   state.bonusSecondsUsed = null;
   state.roundPhase = 'scored';
@@ -2959,6 +2985,10 @@ function isGameOver(){
 function nextRound(){
   state.undoSnapshot = null;
   state.blitz = null;
+  if(state.creditMinuteDebt){
+    state.zeroDiscussionNext = true;
+    state.creditMinuteDebt = false;
+  }
   if(isGameOver()){
     // отметить все вопросы, вытянутые в эту игру (включая блиц/суперблиц),
     // как played, чтобы они не повторились в следующих играх
@@ -3062,9 +3092,10 @@ function renderWheel(){
     const start = center - SECTOR_STEP/2;
     const end = center + SECTOR_STEP/2;
     const num = idx + 1;
-    const isThirteen = num === 13;
+    const kind = state.questions[idx]._kind; // 'normal' | 'internet' | 'blitz' | 'superblitz'
     const played = state.remainingNumbers.indexOf(num) === -1;
-    const wedgeCls = 'wedge ' + (isThirteen ? 'wedge-13' : (idx%2===0 ? 'wedge-a' : 'wedge-b')) + (played ? ' wedge-played' : '');
+    const kindCls = kind === 'internet' ? 'wedge-13' : kind === 'blitz' ? 'wedge-blitz' : kind === 'superblitz' ? 'wedge-super' : (idx%2===0 ? 'wedge-a' : 'wedge-b');
+    const wedgeCls = 'wedge ' + kindCls + (played ? ' wedge-played' : '');
     wedges += `<path class="${wedgeCls}" d="${wedgePath(cx,cy,rOuter,start,end)}"/>`;
 
     const [tx1,ty1] = polarPoint(cx,cy,rOuter-3,start);
@@ -3072,8 +3103,9 @@ function renderWheel(){
     ticks += `<line class="wheel-tick-major" x1="${tx1}" y1="${ty1}" x2="${tx2}" y2="${ty2}"/>`;
 
     const [lx,ly] = polarPoint(cx,cy,rLabel,center);
-    const label = played ? '&#8594;' : (isThirteen ? '13' : '&#9993;');
-    labels += `<text class="wheel-num-label${isThirteen?' b13':''}${played?' played':''}" x="${lx}" y="${ly}">${label}</text>`;
+    const label = played ? '&#8594;' : kind === 'internet' ? '13' : kind === 'blitz' ? '&#9889;' : kind === 'superblitz' ? '&#127942;' : '&#9993;';
+    const labelCls = kind === 'internet' ? ' b13' : (kind === 'blitz' || kind === 'superblitz') ? ' special' : '';
+    labels += `<text class="wheel-num-label${labelCls}${played?' played':''}" x="${lx}" y="${ly}">${label}</text>`;
   }
   const svg = `
   <svg class="wheel-svg" viewBox="0 0 200 200">
@@ -3083,6 +3115,12 @@ function renderWheel(){
       </linearGradient>
       <linearGradient id="wedge13Grad" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0" stop-color="#e0b23a"/><stop offset="100%" stop-color="#8a611a"/>
+      </linearGradient>
+      <linearGradient id="wedgeBlitzGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#6fe0e8"/><stop offset="100%" stop-color="#145a63"/>
+      </linearGradient>
+      <linearGradient id="wedgeSuperGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ff8a80"/><stop offset="100%" stop-color="#7a1020"/>
       </linearGradient>
       <radialGradient id="hubGrad" cx="35%" cy="30%" r="75%">
         <stop offset="0" stop-color="#f5e0a0"/><stop offset="55%" stop-color="#c9a227"/><stop offset="100%" stop-color="#7a5c14"/>
@@ -3121,7 +3159,7 @@ function renderRound(){
   let body = '';
 
   if(rp === 'intro'){
-    body = renderWheel();
+    body = (isZeroDiscussionRound() ? `<div class="banner">⚠ Этот раунд — без обсуждения${state.scoreExperts===5&&state.scoreViewers===5?' (счёт 5:5)':' (возврат «минуты в кредит»)'}</div>` : '') + renderWheel();
   } else if(rp === 'flavor'){
     body = q._kind === 'internet' ? `
     <div class="card flavor-card">
@@ -3160,13 +3198,16 @@ function renderRound(){
   } else if(rp === 'blitz-question'){
     const isSuper = q._kind === 'superblitz';
     const bq = q._blitzQuestions[state.blitz.qIndex];
+    const zd = isZeroDiscussionRound();
     body = `
-    <div class="banner">${isSuper ? '🏆 Суперблиц' : '⚡ Блиц'} · вопрос ${state.blitz.qIndex+1} из 3${state.blitz.player ? ' · ' + esc(state.blitz.player) : ''}</div>
+    <div class="banner">${isSuper ? '🏆 Суперблиц' : '⚡ Блиц'} · вопрос ${state.blitz.qIndex+1} из 3${state.blitz.player ? ' · ' + esc(state.blitz.player) : ''}${zd ? ' · без обсуждения' : ''}</div>
     <div class="card">
       <div class="question-text">${nl2br(bq.question)}</div>
     </div>
     <div class="action-bar">
-      <button class="btn btn-gold btn-block" id="btn-blitz-timer-start">⏱ Начать отсчёт — 20 сек</button>
+      ${zd
+        ? `<button class="btn btn-gold btn-block" id="btn-blitz-skip">Показать ответ</button>`
+        : `<button class="btn btn-gold btn-block" id="btn-blitz-timer-start">⏱ Начать отсчёт — 20 сек</button>`}
     </div>`;
   } else if(rp === 'blitzTimerRunning' || rp === 'blitzTimerPaused'){
     const isSuper = q._kind === 'superblitz';
@@ -3218,13 +3259,16 @@ function renderRound(){
       <button class="btn btn-gold btn-block" id="btn-blitz-confirm">${won ? 'Очко знатокам →' : 'Очко телезрителям →'}</button>
     </div>`;
   } else if(rp === 'question'){
+    const zd = isZeroDiscussionRound();
     body = `
     <div class="card">
       <div class="question-text">${nl2br(q.question)}</div>
-      <div class="qmeta">Выпал номер ${q._playNumber} на волчке${state.timeDebt>0 ? ` · время сокращено на ${state.timeDebt} сек (минута в кредит)` : ''}</div>
+      <div class="qmeta">Выпал номер ${q._playNumber} на волчке${zd ? ' · раунд без обсуждения' : ''}</div>
     </div>
     <div class="action-bar">
-      <button class="btn btn-gold btn-block" id="btn-start-timer">⏱ Начать отсчёт — ${currentQuestionDurationSec()} сек</button>
+      ${zd
+        ? `<button class="btn btn-gold btn-block" id="btn-skip-discussion">Показать ответ</button>`
+        : `<button class="btn btn-gold btn-block" id="btn-start-timer">⏱ Начать отсчёт — ${state.timerDuration} сек</button>`}
     </div>`;
   } else if(rp === 'timerRunning' || rp === 'timerPaused'){
     const paused = rp === 'timerPaused';
@@ -3240,13 +3284,10 @@ function renderRound(){
         </svg>
         <div class="timer-digits" id="timer-digits">--:--</div>
       </div>
-      ${state.timeDebt>0 ? `<div class="debt-note">−${state.timeDebt} сек за «минуту в кредит»</div>` : ''}
+      ${state.creditMinuteUsedThisRound ? `<div class="debt-note">взята «минута в кредит»</div>` : ''}
     </div>
     <div class="action-bar">
-      <div class="secondary-row">
-        <button class="btn btn-outline" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
-        <button class="btn btn-outline" id="btn-credit-minute" ${state.remainingNumbers.length===0 ? 'disabled' : ''}>+1 мин в кредит</button>
-      </div>
+      <button class="btn btn-outline btn-block" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
       <button class="btn btn-gold btn-block" id="btn-early-answer">🔔 Досрочный ответ</button>
     </div>`;
   } else if(rp === 'bonusMinute' || rp === 'bonusMinutePaused'){
@@ -3281,6 +3322,7 @@ function renderRound(){
       <div class="muted">${readyMsg}</div>
     </div>
     <div class="action-bar">
+      ${creditMinuteEligible() ? `<button class="btn btn-outline btn-block" id="btn-credit-minute">🆘 Минута в кредит (счёт ${state.scoreExperts}:${state.scoreViewers})</button>` : ''}
       <button class="btn btn-gold btn-block" id="btn-reveal-answer">Показать ответ</button>
     </div>`;
   } else if(rp === 'answer'){
@@ -3379,8 +3421,9 @@ function attachEvents(){
   once('btn-spin', onSpinClick);
   once('btn-read-question', () => { state.roundPhase = 'question'; safeSave(); render(); });
   once('btn-start-timer', startTimer);
+  once('btn-skip-discussion', skipDiscussion);
   once('btn-pause-resume', () => { timerState.running ? pauseTimer() : resumeTimer(); });
-  once('btn-credit-minute', extendTimerCredit);
+  once('btn-credit-minute', requestCreditMinute);
   once('btn-early-answer', stopEarly);
   once('btn-bonus-minute-done', finalizeBonusMinute);
   once('btn-reveal-answer', revealAnswer);
@@ -3407,6 +3450,7 @@ function attachEvents(){
   });
   once('btn-blitz-start', startBlitzSequence);
   once('btn-blitz-timer-start', startBlitzTimer);
+  once('btn-blitz-skip', stopBlitzEarly);
   once('btn-blitz-answered', stopBlitzEarly);
   once('btn-blitz-correct', () => judgeBlitz(true));
   once('btn-blitz-wrong', () => judgeBlitz(false));
