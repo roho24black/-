@@ -114,6 +114,9 @@
     margin:10px 0; text-align:center;
   }
   .install-row{ margin-top:14px; }
+  .roster-chips{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .roster-chip{ min-height:40px; padding:8px 14px; font-size:14px; }
+  .roster-chip.active{ background:rgba(201,162,39,.22); border-color:var(--gold-light); }
   .ios-tip{
     background:rgba(255,255,255,.04); border:1px dashed rgba(201,162,39,.4); color:var(--muted);
     border-radius:10px; padding:10px 12px; font-size:12.5px; font-family:-apple-system, system-ui, sans-serif;
@@ -149,6 +152,7 @@
   .wedge-a{ fill:#173722; }
   .wedge-b{ fill:#0f2517; }
   .wedge-13{ fill:url(#wedge13Grad); stroke:var(--gold-light); stroke-width:1.6; }
+  .wedge-played{ opacity:.4; }
   .wheel-tick{ stroke:var(--gold-dim); stroke-width:1; opacity:.65; }
   .wheel-tick-major{ stroke:var(--gold-light); stroke-width:1.4; opacity:.85; }
   .wheel-num-label{
@@ -157,6 +161,7 @@
     paint-order:stroke; stroke:rgba(0,0,0,.35); stroke-width:2px;
   }
   .wheel-num-label.b13{ fill:#2a1c05; font-size:15px; font-weight:800; stroke:none; }
+  .wheel-num-label.played{ fill:#6b6455; font-size:17px; stroke:rgba(0,0,0,.25); }
   .wheel-gloss{ fill:url(#glossGrad); pointer-events:none; }
   .wheel-arrow-g{
     transform-box:view-box; transform-origin:100px 100px;
@@ -318,78 +323,6 @@ const SENDERS = [
   {name:"Григорий Афанасьев", verb:"прислал"}
 ];
 
-const BONUS_QUESTIONS = [
-  {
-    question:"Как называется одним словом боязнь числа тринадцать?",
-    answer:"Трискаидекафобия",
-    comment:"Забавное совпадение: этот термин отлично подходит именно к сектору №13."
-  },
-  {
-    question:"Назовите единственный месяц, который в невисокосный год состоит ровно из четырёх календарных недель, без единого лишнего дня.",
-    answer:"Февраль",
-    comment:"28 дней — это ровно 4×7, единственный такой случай среди месяцев."
-  },
-  {
-    question:"Скрипка, арфа, виолончель, флейта — какой из этих четырёх инструментов не струнный?",
-    answer:"Флейта",
-    comment:"Флейта — духовой инструмент, остальные три — струнные."
-  },
-  {
-    question:"Продолжите русскую пословицу: «Тише едешь — …»",
-    answer:"…дальше будешь",
-    comment:"Пословица о пользе неспешности и терпения."
-  },
-  {
-    question:"Сколько будет, если сложить все целые числа от 1 до 10 включительно?",
-    answer:"55",
-    comment:"Сумма арифметической прогрессии: (1+10)×10÷2 = 55."
-  },
-  {
-    question:"Воробей, летучая мышь, ласточка, стриж — назовите единственное млекопитающее из перечисленных.",
-    answer:"Летучая мышь",
-    comment:"Остальные три — птицы, летучая мышь — млекопитающее, хоть и умеет летать."
-  },
-  {
-    question:"Как в народе называют дорожный знак «Въезд запрещён» — белый прямоугольник на красном круге?",
-    answer:"«Кирпич»",
-    comment:"Белый прямоугольник на красном фоне действительно похож на кирпич."
-  },
-  {
-    question:"Назовите столицу Австралии. Подсказка: это не Сидней и не Мельбурн.",
-    answer:"Канберра",
-    comment:"Канберру построили специально как компромисс между соперничавшими за этот статус Сиднеем и Мельбурном."
-  },
-  {
-    question:"Какой овощ традиционно вырезают в виде светящегося фонаря на Хэллоуин?",
-    answer:"Тыкву",
-    comment:"Изначально в Ирландии для этого использовали репу, а в Америке прижилась более крупная тыква."
-  },
-  {
-    question:"Сколько нот в стандартной музыкальной гамме, прежде чем она повторится через октаву?",
-    answer:"Семь",
-    comment:"До, ре, ми, фа, соль, ля, си — восьмая нота уже открывает следующую октаву."
-  },
-  {
-    question:"Как называется страх перед пятницей, 13-м числом — более длинным термином, чем просто «трискаидекафобия»?",
-    answer:"Параскевидекатриафобия",
-    comment:"Составлено из греческих корней: «параскеви» — пятница, «декатриа» — тринадцать."
-  },
-  {
-    question:"Согласно расхожему поверью, сколько жизней у кошки?",
-    answer:"Девять",
-    comment:"Поверье связано с удивительной живучестью и ловкостью кошек."
-  },
-  {
-    question:"Назовите одним словом группу волков.",
-    answer:"Стая",
-    comment:"Волчья стая обычно состоит из одной семьи с чётко выстроенной иерархией."
-  },
-  {
-    question:"Какая шахматная фигура на пустой доске может пройти за один ход больше всего клеток по прямой?",
-    answer:"Ферзь",
-    comment:"Ферзь объединяет в себе ходы ладьи и слона — самая дальнобойная фигура в игре."
-  }
-];
 
 /* =========================================================================
    QUESTIONS_START — основная база вопросов ЧГК (подставляется отдельно)
@@ -2330,6 +2263,174 @@ const QUESTIONS = [
   "author": "Матвей Гомон",
   "tournament": "Кнопочки",
   "difficulty": "hard"
+ },
+ {
+  "id": 177,
+  "question": "Как называется одним словом боязнь числа тринадцать?",
+  "answer": "Трискаидекафобия",
+  "acceptable": "",
+  "comment": "Забавное совпадение: этот термин отлично подходит именно к сектору №13.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 178,
+  "question": "Назовите единственный месяц, который в невисокосный год состоит ровно из четырёх календарных недель, без единого лишнего дня.",
+  "answer": "Февраль",
+  "acceptable": "",
+  "comment": "28 дней — это ровно 4×7, единственный такой случай среди месяцев.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 179,
+  "question": "Скрипка, арфа, виолончель, флейта — какой из этих четырёх инструментов не струнный?",
+  "answer": "Флейта",
+  "acceptable": "",
+  "comment": "Флейта — духовой инструмент, остальные три — струнные.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 180,
+  "question": "Продолжите русскую пословицу: «Тише едешь — …»",
+  "answer": "…дальше будешь",
+  "acceptable": "",
+  "comment": "Пословица о пользе неспешности и терпения.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 181,
+  "question": "Сколько будет, если сложить все целые числа от 1 до 10 включительно?",
+  "answer": "55",
+  "acceptable": "",
+  "comment": "Сумма арифметической прогрессии: (1+10)×10÷2 = 55.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 182,
+  "question": "Воробей, летучая мышь, ласточка, стриж — назовите единственное млекопитающее из перечисленных.",
+  "answer": "Летучая мышь",
+  "acceptable": "",
+  "comment": "Остальные три — птицы, летучая мышь — млекопитающее, хоть и умеет летать.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 183,
+  "question": "Как в народе называют дорожный знак «Въезд запрещён» — белый прямоугольник на красном круге?",
+  "answer": "«Кирпич»",
+  "acceptable": "",
+  "comment": "Белый прямоугольник на красном фоне действительно похож на кирпич.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 184,
+  "question": "Назовите столицу Австралии. Подсказка: это не Сидней и не Мельбурн.",
+  "answer": "Канберра",
+  "acceptable": "",
+  "comment": "Канберру построили специально как компромисс между соперничавшими за этот статус Сиднеем и Мельбурном.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 185,
+  "question": "Какой овощ традиционно вырезают в виде светящегося фонаря на Хэллоуин?",
+  "answer": "Тыкву",
+  "acceptable": "",
+  "comment": "Изначально в Ирландии для этого использовали репу, а в Америке прижилась более крупная тыква.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 186,
+  "question": "Сколько нот в стандартной музыкальной гамме, прежде чем она повторится через октаву?",
+  "answer": "Семь",
+  "acceptable": "",
+  "comment": "До, ре, ми, фа, соль, ля, си — восьмая нота уже открывает следующую октаву.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 187,
+  "question": "Как называется страх перед пятницей, 13-м числом — более длинным термином, чем просто «трискаидекафобия»?",
+  "answer": "Параскевидекатриафобия",
+  "acceptable": "",
+  "comment": "Составлено из греческих корней: «параскеви» — пятница, «декатриа» — тринадцать.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 188,
+  "question": "Согласно расхожему поверью, сколько жизней у кошки?",
+  "answer": "Девять",
+  "acceptable": "",
+  "comment": "Поверье связано с удивительной живучестью и ловкостью кошек.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 189,
+  "question": "Назовите одним словом группу волков.",
+  "answer": "Стая",
+  "acceptable": "",
+  "comment": "Волчья стая обычно состоит из одной семьи с чётко выстроенной иерархией.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
+ },
+ {
+  "id": 190,
+  "question": "Какая шахматная фигура на пустой доске может пройти за один ход больше всего клеток по прямой?",
+  "answer": "Ферзь",
+  "acceptable": "",
+  "comment": "Ферзь объединяет в себе ходы ладьи и слона — самая дальнобойная фигура в игре.",
+  "source": "",
+  "author": "",
+  "tournament": "",
+  "difficulty": "easy",
+  "original": true
  }
 ];
 /* QUESTIONS_END */
@@ -2344,21 +2445,23 @@ function freshState(){
     phase:'setup',
     roundPhase:'intro',
     teamName:'',
+    teamRoster:[],
+    captain:'',
     timerDuration:60,
     questions:[],
+    allDrawnQuestionIds:[],
     currentIndex:0,
     activeSlot:null,
     scoreExperts:0,
     scoreViewers:0,
     results:[],
     playedQuestionIds:[],
-    playedBonusIndexes:[],
     wheelRotation:0,
     remainingNumbers:[],
     timeDebt:0,
-    currentBonus:null,
     usedBonusMinute:false,
     bonusSecondsUsed:null,
+    blitz:null,
     undoSnapshot:null,
   };
 }
@@ -2375,8 +2478,9 @@ function safeLoad(){
       // никогда не восстанавливаем игру "в процессе" с активным таймером - только пройденный прогресс
       if(state.phase === 'round'){
         // безопасно вернуть на экран настройки, чтобы не тащить сломанный таймер между сессиями
-        if(['timerRunning','timerPaused','bonusMinute','bonusMinutePaused'].indexOf(state.roundPhase) !== -1){
-          state.roundPhase = 'question';
+        const timerPhasesOnLoad = ['timerRunning','timerPaused','bonusMinute','bonusMinutePaused','blitzTimerRunning','blitzTimerPaused'];
+        if(timerPhasesOnLoad.indexOf(state.roundPhase) !== -1){
+          state.roundPhase = state.blitz ? 'blitz-question' : 'question';
         }
       }
     }
@@ -2457,32 +2561,66 @@ function nl2br(s){ return esc(s).replace(/\n+/g,'<br>'); }
 /* =========================================================================
    5. СБОРКА ИГРЫ
    ========================================================================= */
+const DRAW_SIZE = 17; // 10 обычных + 1 из интернета (сектор 13) + 3 блиц + 3 суперблиц
 function drawGame(){
   let pool = QUESTIONS.filter(q => state.playedQuestionIds.indexOf(q.id) === -1);
-  if(pool.length < 12){
+  if(pool.length < DRAW_SIZE){
     state.playedQuestionIds = [];
     pool = QUESTIONS.slice();
   }
-  const chosen = shuffle(pool).slice(0, Math.min(12, pool.length));
+  const drawn = shuffle(pool).slice(0, Math.min(DRAW_SIZE, pool.length));
+  const normalQs = drawn.slice(0, 10);
+  const internetQ = drawn[10];
+  const blitzQs = drawn.slice(11, 14);
+  const superQs = drawn.slice(14, 17);
+
+  // какие из позиций 1..12 в этой игре станут блицем и суперблицем - решается
+  // случайно и заранее не показывается ведущему (сюрприз, как в реальном волчке)
+  const specialPositions = shuffle([1,2,3,4,5,6,7,8,9,10,11,12]).slice(0,2);
+  const blitzPos = specialPositions[0];
+  const superPos = specialPositions[1];
+
   const cities = shuffle(CITIES);
   const senders = shuffle(SENDERS);
 
-  state.questions = chosen.map((q, i) => ({
-    ...q,
-    _city: q.city || cities[i % cities.length],
-    _sender: q.sender || senders[i % senders.length],
-    _playNumber: i + 1,
-  }));
+  const questions = [];
+  let normalCursor = 0;
+  for(let pos = 1; pos <= 13; pos++){
+    if(pos === 13){
+      questions.push({
+        ...internetQ,
+        _kind:'internet',
+        _sender: internetQ.sender || senders[senders.length-1],
+        _playNumber: pos,
+      });
+    } else if(pos === blitzPos){
+      questions.push({ _kind:'blitz', _playNumber: pos, _blitzQuestions: blitzQs });
+    } else if(pos === superPos){
+      questions.push({ _kind:'superblitz', _playNumber: pos, _blitzQuestions: superQs });
+    } else {
+      const q = normalQs[normalCursor++];
+      questions.push({
+        ...q,
+        _kind:'normal',
+        _city: q.city || cities[(pos-1) % cities.length],
+        _sender: q.sender || senders[(pos-1) % senders.length],
+        _playNumber: pos,
+      });
+    }
+  }
+
+  state.questions = questions;
+  state.allDrawnQuestionIds = drawn.map(q => q.id);
   state.currentIndex = 0;
   state.activeSlot = null;
   state.scoreExperts = 0;
   state.scoreViewers = 0;
   state.results = [];
-  state.remainingNumbers = state.questions.map((_,i)=>i+1);
+  state.remainingNumbers = questions.map(q => q._playNumber);
   state.timeDebt = 0;
-  state.currentBonus = null;
   state.usedBonusMinute = false;
   state.bonusSecondsUsed = null;
+  state.blitz = null;
   state.undoSnapshot = null;
   state.phase = 'round';
   state.roundPhase = 'intro';
@@ -2525,8 +2663,7 @@ function spinTo(targetNumber){
 }
 
 function chooseLanding(){
-  const options = state.remainingNumbers.slice();
-  options.push(13);
+  const options = state.remainingNumbers;
   return options[Math.floor(Math.random()*options.length)];
 }
 
@@ -2541,40 +2678,24 @@ function onSpinClick(){
   const onEnd = () => {
     arrow.removeEventListener('transitionend', onEnd);
     spinLock = false;
-    if(landing === 13){
-      handleBonusLanding();
-    }else{
-      state.remainingNumbers = state.remainingNumbers.filter(n => n !== landing);
-      state.activeSlot = landing;
+    state.remainingNumbers = state.remainingNumbers.filter(n => n !== landing);
+    state.activeSlot = landing;
+    const q = state.questions[landing - 1];
+    if(q._kind === 'superblitz'){
+      state.blitz = { kind:'superblitz', player:'', qIndex:0, results:[], won:null };
+      state.roundPhase = 'blitz-select-player';
+    } else if(q._kind === 'blitz'){
+      state.blitz = { kind:'blitz', player:'', qIndex:0, results:[], won:null };
+      state.roundPhase = 'blitz-intro';
+    } else {
       state.roundPhase = 'flavor';
-      safeSave();
-      render();
     }
+    safeSave();
+    render();
   };
   if(arrow) arrow.addEventListener('transitionend', onEnd, {once:true});
   const btn = document.getElementById('btn-spin');
   if(btn) btn.setAttribute('disabled','disabled');
-}
-
-function handleBonusLanding(){
-  let pool = BONUS_QUESTIONS.map((q,i)=>i).filter(i => state.playedBonusIndexes.indexOf(i) === -1);
-  if(pool.length === 0){
-    state.playedBonusIndexes = [];
-    pool = BONUS_QUESTIONS.map((q,i)=>i);
-  }
-  const idx = pool[Math.floor(Math.random()*pool.length)];
-  state.playedBonusIndexes.push(idx);
-  state.currentBonus = BONUS_QUESTIONS[idx];
-  state.roundPhase = 'bonus';
-  safeSave();
-  render();
-}
-
-function afterBonus(){
-  state.currentBonus = null;
-  state.roundPhase = 'intro';
-  safeSave();
-  render();
 }
 
 /* =========================================================================
@@ -2601,19 +2722,21 @@ function startTimer(){
   render();
   tickLoop();
 }
+const PAUSE_MAP = { bonusMinute:'bonusMinutePaused', blitzTimerRunning:'blitzTimerPaused' };
+const RESUME_MAP = { bonusMinutePaused:'bonusMinute', blitzTimerPaused:'blitzTimerRunning' };
 function pauseTimer(){
   if(!timerState.running) return;
   timerState.remainingMs = Math.max(0, timerState.endsAt - performance.now());
   timerState.running = false;
   if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
-  state.roundPhase = (state.roundPhase === 'bonusMinute') ? 'bonusMinutePaused' : 'timerPaused';
+  state.roundPhase = PAUSE_MAP[state.roundPhase] || 'timerPaused';
   safeSave();
   render();
 }
 function resumeTimer(){
   timerState.endsAt = performance.now() + timerState.remainingMs;
   timerState.running = true;
-  state.roundPhase = (state.roundPhase === 'bonusMinutePaused') ? 'bonusMinute' : 'timerRunning';
+  state.roundPhase = RESUME_MAP[state.roundPhase] || 'timerRunning';
   render();
   tickLoop();
 }
@@ -2639,6 +2762,12 @@ function tickLoop(){
     timerState.running = false;
     tickedLastSeconds = null;
     playEndGong();
+    if(state.roundPhase === 'blitzTimerRunning'){
+      state.roundPhase = 'blitz-answer';
+      safeSave();
+      render();
+      return;
+    }
     if(state.roundPhase === 'bonusMinute'){
       state.bonusSecondsUsed = 60; // доп. минута выработана полностью
     }
@@ -2708,6 +2837,78 @@ function revealAnswer(){
   safeSave();
   render();
 }
+
+/* =========================================================================
+   7б. БЛИЦ / СУПЕРБЛИЦ
+   Правила (chgk.tvigra.ru/reglament): 3 вопроса, 20 секунд на каждый,
+   нужны все три верных подряд - одна ошибка проваливает весь сектор.
+   В блице отвечает вся команда, в суперблице - один игрок по решению капитана.
+   ========================================================================= */
+function selectBlitzPlayer(name){
+  state.blitz.player = (name||'').trim();
+  state.roundPhase = 'blitz-intro';
+  safeSave();
+  render();
+}
+function startBlitzSequence(){
+  state.roundPhase = 'blitz-question';
+  safeSave();
+  render();
+}
+function startBlitzTimer(){
+  if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  timerState.durationMs = 20000;
+  timerState.remainingMs = 20000;
+  timerState.endsAt = performance.now() + 20000;
+  timerState.running = true;
+  state.roundPhase = 'blitzTimerRunning';
+  playStartTone();
+  safeSave();
+  render();
+  tickLoop();
+}
+function stopBlitzEarly(){
+  if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  timerState.running = false;
+  state.roundPhase = 'blitz-answer';
+  safeSave();
+  render();
+}
+function judgeBlitz(correct){
+  state.blitz.results.push(correct);
+  if(!correct){
+    state.blitz.won = false;
+    state.roundPhase = 'blitz-result';
+  } else if(state.blitz.qIndex >= 2){
+    state.blitz.won = true;
+    state.roundPhase = 'blitz-result';
+  } else {
+    state.blitz.qIndex++;
+    state.roundPhase = 'blitz-question';
+  }
+  safeSave();
+  render();
+}
+function scoreBlitzRound(){
+  const q = state.questions[state.activeSlot - 1];
+  const won = state.blitz.won;
+  state.undoSnapshot = {
+    scoreExperts: state.scoreExperts,
+    scoreViewers: state.scoreViewers,
+    results: state.results.slice(),
+    blitz: state.blitz,
+    wasBlitz: true,
+  };
+  if(won) state.scoreExperts++; else state.scoreViewers++;
+  const correctCount = state.blitz.results.filter(Boolean).length;
+  const label = (q._kind === 'superblitz' ? 'Суперблиц' : 'Блиц')
+    + (state.blitz.player ? ' — ' + state.blitz.player : '')
+    + ` (${correctCount}/${state.blitz.results.length})`;
+  state.results.push({ questionId: 'sp' + state.activeSlot, question: label, correct: won });
+  state.roundPhase = 'scored';
+  safeSave();
+  render();
+}
 function renderTimerDoneState(){
   state.roundPhase = 'answer-ready';
   render();
@@ -2742,8 +2943,13 @@ function undoScore(){
   state.scoreExperts = state.undoSnapshot.scoreExperts;
   state.scoreViewers = state.undoSnapshot.scoreViewers;
   state.results = state.undoSnapshot.results;
+  if(state.undoSnapshot.wasBlitz){
+    state.blitz = state.undoSnapshot.blitz;
+    state.roundPhase = 'blitz-result';
+  } else {
+    state.roundPhase = 'answer';
+  }
   state.undoSnapshot = null;
-  state.roundPhase = 'answer';
   safeSave();
   render();
 }
@@ -2752,10 +2958,12 @@ function isGameOver(){
 }
 function nextRound(){
   state.undoSnapshot = null;
+  state.blitz = null;
   if(isGameOver()){
-    // отметить все сыгранные вопросы как played для будущих игр
-    state.questions.forEach(q => {
-      if(state.playedQuestionIds.indexOf(q.id) === -1) state.playedQuestionIds.push(q.id);
+    // отметить все вопросы, вытянутые в эту игру (включая блиц/суперблиц),
+    // как played, чтобы они не повторились в следующих играх
+    state.allDrawnQuestionIds.forEach(id => {
+      if(state.playedQuestionIds.indexOf(id) === -1) state.playedQuestionIds.push(id);
     });
     state.phase = 'summary';
     safeSave();
@@ -2769,14 +2977,14 @@ function nextRound(){
   render();
 }
 function backToSetup(){
+  const teamName = state.teamName, teamRoster = state.teamRoster, captain = state.captain, timerDuration = state.timerDuration;
   state = freshState();
-  // сохраняем историю сыгранных вопросов между переходами на экран настройки не нужно - drawGame сам управляет
   const saved = (()=>{ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); }catch(e){ return null; } })();
   if(saved){
     state.playedQuestionIds = saved.playedQuestionIds || [];
-    state.playedBonusIndexes = saved.playedBonusIndexes || [];
     state.wheelRotation = saved.wheelRotation || 0;
   }
+  state.teamName = teamName; state.teamRoster = teamRoster; state.captain = captain; state.timerDuration = timerDuration;
   safeSave();
   render();
 }
@@ -2796,10 +3004,11 @@ function render(){
   else html = renderSummary();
   app.innerHTML = html;
   attachEvents();
-  const timerPhases = ['timerRunning','timerPaused','bonusMinute','bonusMinutePaused'];
+  const timerPhases = ['timerRunning','timerPaused','bonusMinute','bonusMinutePaused','blitzTimerRunning','blitzTimerPaused'];
+  const pausedPhases = ['timerPaused','bonusMinutePaused','blitzTimerPaused'];
   if(state.phase === 'round' && timerPhases.indexOf(state.roundPhase) !== -1){
     // восстановление визуального состояния таймера при перерисовке во время хода
-    const isPaused = state.roundPhase === 'timerPaused' || state.roundPhase === 'bonusMinutePaused';
+    const isPaused = pausedPhases.indexOf(state.roundPhase) !== -1;
     const remaining = isPaused ? timerState.remainingMs : undefined;
     updateTimerDOM(true, remaining);
   }
@@ -2808,7 +3017,7 @@ function render(){
 function renderSetup(){
   const total = QUESTIONS.length;
   const remaining = total - state.playedQuestionIds.length;
-  const poolResetsNext = remaining < 12;
+  const poolResetsNext = remaining < DRAW_SIZE;
   return `
   <div class="wrap">
     <header class="top">${owlSVG()}<h1>Что? Где? Когда?</h1></header>
@@ -2816,23 +3025,27 @@ function renderSetup(){
       <h2 class="section-title">Настройка игры</h2>
       <label class="field-label" for="in-team">Название команды (необязательно)</label>
       <input type="text" id="in-team" placeholder="Знатоки" value="${esc(state.teamName)}">
+      <label class="field-label" for="in-roster">Состав команды (через запятую)</label>
+      <input type="text" id="in-roster" placeholder="Аня, Борис, Вика..." value="${esc(state.teamRoster.join(', '))}">
+      <label class="field-label" for="in-captain">Капитан</label>
+      <input type="text" id="in-captain" placeholder="Одно из имён выше" value="${esc(state.captain)}">
       <label class="field-label" for="in-timer">Время на обсуждение, секунд</label>
       <input type="number" id="in-timer" min="15" max="180" step="5" value="${state.timerDuration}">
       <div class="setup-stack">
-        <button class="btn btn-gold btn-block" id="btn-draw" style="margin-top:20px;">🎲 Собрать игру — 12 вопросов</button>
+        <button class="btn btn-gold btn-block" id="btn-draw" style="margin-top:20px;">🎲 Собрать игру — 13 вопросов</button>
       </div>
       <div class="pool-stat">В базе ${total} вопросов · сыграно ${state.playedQuestionIds.length} · осталось ${Math.max(0,remaining)}</div>
       ${poolResetsNext ? `<div class="banner">Вопросы почти закончились — эта игра начнёт новый круг (возможны повторы прошлых вопросов)</div>` : ''}
     </div>
     ${pwa.canInstall ? `<div class="install-row"><button class="btn btn-outline btn-block" id="btn-install">📲 Установить как приложение</button></div>` : ''}
     ${pwa.showIosTip ? `<div class="ios-tip">На iPhone/iPad: чтобы открыть как приложение — нажмите «Поделиться» в Safari, затем «На экран «Домой»».</div>` : ''}
-    <p class="muted center" style="margin-top:16px;">Классика: «Знатоки» против «Телезрителей», игра до 6 очков или 12 вопросов.<br>На волчке 13 секторов — 13-й дарит бонусный вопрос без риска для счёта.</p>
+    <p class="muted center" style="margin-top:16px;">Классика: «Знатоки» против «Телезрителей», игра до 6 очков.<br>На волчке 13 секторов: 13-й — вопрос из интернета, ещё два (заранее неизвестно каких) — «Блиц» и «Суперблиц».</p>
   </div>`;
 }
 
 function renderScoreboard(){
   return `
-  <div class="round-counter">Вопрос ${state.currentIndex+1} из ${state.questions.length}${state.teamName ? ' · ' + esc(state.teamName) : ''}</div>
+  <div class="round-counter">Вопрос ${state.currentIndex+1} из ${state.questions.length}${state.teamName ? ' · ' + esc(state.teamName) : ''}${state.captain ? ' · капитан ' + esc(state.captain) : ''}</div>
   <div class="scoreboard">
     <div class="score-side experts"><div class="label">Знатоки</div><div class="num">${state.scoreExperts}</div></div>
     <div class="score-mid">:</div>
@@ -2848,8 +3061,10 @@ function renderWheel(){
     const center = idx * SECTOR_STEP;
     const start = center - SECTOR_STEP/2;
     const end = center + SECTOR_STEP/2;
-    const isBonus = idx === 12;
-    const wedgeCls = isBonus ? 'wedge wedge-13' : ('wedge ' + (idx%2===0 ? 'wedge-a' : 'wedge-b'));
+    const num = idx + 1;
+    const isThirteen = num === 13;
+    const played = state.remainingNumbers.indexOf(num) === -1;
+    const wedgeCls = 'wedge ' + (isThirteen ? 'wedge-13' : (idx%2===0 ? 'wedge-a' : 'wedge-b')) + (played ? ' wedge-played' : '');
     wedges += `<path class="${wedgeCls}" d="${wedgePath(cx,cy,rOuter,start,end)}"/>`;
 
     const [tx1,ty1] = polarPoint(cx,cy,rOuter-3,start);
@@ -2857,7 +3072,8 @@ function renderWheel(){
     ticks += `<line class="wheel-tick-major" x1="${tx1}" y1="${ty1}" x2="${tx2}" y2="${ty2}"/>`;
 
     const [lx,ly] = polarPoint(cx,cy,rLabel,center);
-    labels += `<text class="wheel-num-label${isBonus?' b13':''}" x="${lx}" y="${ly}">${isBonus?'13':(idx+1)}</text>`;
+    const label = played ? '&#8594;' : (isThirteen ? '13' : '&#9993;');
+    labels += `<text class="wheel-num-label${isThirteen?' b13':''}${played?' played':''}" x="${lx}" y="${ly}">${label}</text>`;
   }
   const svg = `
   <svg class="wheel-svg" viewBox="0 0 200 200">
@@ -2906,40 +3122,100 @@ function renderRound(){
 
   if(rp === 'intro'){
     body = renderWheel();
-  } else if(rp === 'bonus'){
-    const b = state.currentBonus;
-    body = `
-    <div class="card flavor-card">
-      <div class="from" style="color:#ffd76a;">✨ СЕКТОР №13 — бонусный вопрос</div>
-    </div>
-    <div class="card" style="margin-top:12px;">
-      <div class="question-text">${nl2br(b.question)}</div>
-    </div>
-    <div class="action-bar">
-      <button class="btn btn-gold btn-block" id="btn-bonus-answer">Показать ответ</button>
-    </div>`;
-  } else if(rp === 'bonus-answer'){
-    const b = state.currentBonus;
-    body = `
-    <div class="card flavor-card">
-      <div class="from" style="color:#ffd76a;">✨ СЕКТОР №13</div>
-    </div>
-    <div class="card answer-block" style="margin-top:12px;">
-      <div class="answer-label">Ответ</div>
-      <div class="answer-text">${esc(b.answer)}</div>
-      ${b.comment ? `<div class="comment-text">${nl2br(b.comment)}</div>` : ''}
-    </div>
-    <div class="action-bar">
-      <button class="btn btn-gold btn-block" id="btn-bonus-continue">Крутить волчок дальше →</button>
-    </div>`;
   } else if(rp === 'flavor'){
-    body = `
+    body = q._kind === 'internet' ? `
+    <div class="card flavor-card">
+      <div class="from">Вопрос ${q._sender.verb} ${q._sender.name}</div>
+      <div class="city">🌐 через интернет</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-read-question">📖 Читать вопрос</button>
+    </div>` : `
     <div class="card flavor-card">
       <div class="from">Вопрос ${q._sender.verb} ${q._sender.name}</div>
       <div class="city">из города ${q._city}</div>
     </div>
     <div class="action-bar">
       <button class="btn btn-gold btn-block" id="btn-read-question">📖 Читать вопрос</button>
+    </div>`;
+  } else if(rp === 'blitz-select-player'){
+    const chips = state.teamRoster.map(name => `<button class="btn btn-outline roster-chip" data-name="${esc(name)}">${esc(name)}${name===state.captain?' 👑':''}</button>`).join('');
+    body = `
+    <div class="banner">🏆 Выпал СУПЕРБЛИЦ — за столом остаётся один игрок (решает капитан)</div>
+    <div class="card center">
+      ${chips ? `<div class="roster-chips">${chips}</div>` : ''}
+      <label class="field-label" for="in-blitz-player" style="margin-top:14px;">${state.teamRoster.length ? 'или впишите другое имя' : 'Впишите имя игрока'}</label>
+      <input type="text" id="in-blitz-player" placeholder="Имя" value="${esc(state.captain||'')}">
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-blitz-player-go">Продолжить</button>
+    </div>`;
+  } else if(rp === 'blitz-intro'){
+    const isSuper = q._kind === 'superblitz';
+    body = `
+    <div class="banner">${isSuper ? '🏆 СУПЕРБЛИЦ' : '⚡ БЛИЦ'} — три вопроса от телезрителей, 20 секунд на каждый. Нужны все три верных подряд — одна ошибка проваливает сектор.${isSuper && state.blitz.player ? ` Отвечает: <b>${esc(state.blitz.player)}</b>.` : (!isSuper ? ' Отвечает вся команда.' : '')}</div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-blitz-start">Начать</button>
+    </div>`;
+  } else if(rp === 'blitz-question'){
+    const isSuper = q._kind === 'superblitz';
+    const bq = q._blitzQuestions[state.blitz.qIndex];
+    body = `
+    <div class="banner">${isSuper ? '🏆 Суперблиц' : '⚡ Блиц'} · вопрос ${state.blitz.qIndex+1} из 3${state.blitz.player ? ' · ' + esc(state.blitz.player) : ''}</div>
+    <div class="card">
+      <div class="question-text">${nl2br(bq.question)}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-blitz-timer-start">⏱ Начать отсчёт — 20 сек</button>
+    </div>`;
+  } else if(rp === 'blitzTimerRunning' || rp === 'blitzTimerPaused'){
+    const isSuper = q._kind === 'superblitz';
+    const paused = rp === 'blitzTimerPaused';
+    const bq = q._blitzQuestions[state.blitz.qIndex];
+    body = `
+    <div class="banner">${isSuper ? '🏆 Суперблиц' : '⚡ Блиц'} · вопрос ${state.blitz.qIndex+1} из 3${state.blitz.player ? ' · ' + esc(state.blitz.player) : ''}</div>
+    <div class="card">
+      <div class="question-text" style="font-size:clamp(15px,4vw,17px); opacity:.85;">${nl2br(bq.question)}</div>
+    </div>
+    <div class="timer-zone">
+      <div class="timer-ring-wrap">
+        <svg viewBox="0 0 120 120">
+          <circle class="timer-ring-bg" cx="60" cy="60" r="54"/>
+          <circle class="timer-ring-fg" id="timer-ring-fg" cx="60" cy="60" r="54"/>
+        </svg>
+        <div class="timer-digits" id="timer-digits">--:--</div>
+      </div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-outline btn-block" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
+      <button class="btn btn-gold btn-block" id="btn-blitz-answered">Ответили!</button>
+    </div>`;
+  } else if(rp === 'blitz-answer'){
+    const isSuper = q._kind === 'superblitz';
+    const bq = q._blitzQuestions[state.blitz.qIndex];
+    body = `
+    <div class="banner">${isSuper ? '🏆 Суперблиц' : '⚡ Блиц'} · вопрос ${state.blitz.qIndex+1} из 3</div>
+    <div class="card answer-block">
+      <div class="answer-label">Ответ</div>
+      <div class="answer-text">${esc(bq.answer)}</div>
+      ${bq.comment ? `<div class="comment-text">${nl2br(bq.comment)}</div>` : ''}
+    </div>
+    <div class="score-buttons">
+      <button class="btn btn-score" id="btn-blitz-correct"><span class="score-dot" style="color:#78d78e; background:#78d78e;"></span><span class="label">Верно</span></button>
+      <button class="btn btn-score" id="btn-blitz-wrong"><span class="score-dot" style="color:#ef8378; background:#ef8378;"></span><span class="label">Неверно</span></button>
+    </div>`;
+  } else if(rp === 'blitz-result'){
+    const isSuper = q._kind === 'superblitz';
+    const won = state.blitz.won;
+    const correctCount = state.blitz.results.filter(Boolean).length;
+    body = `
+    <div class="card center">
+      <div class="answer-label">${isSuper ? 'СУПЕРБЛИЦ' : 'БЛИЦ'}</div>
+      <div class="answer-text" style="${won ? '' : 'color:var(--red-light);'}">${won ? '✅ Пройден!' : '❌ Не пройден'}</div>
+      <div class="muted">${correctCount} из ${state.blitz.results.length} верных${!won ? ' — сектор проигран' : ' подряд'}</div>
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-gold btn-block" id="btn-blitz-confirm">${won ? 'Очко знатокам →' : 'Очко телезрителям →'}</button>
     </div>`;
   } else if(rp === 'question'){
     body = `
@@ -3090,15 +3366,17 @@ function attachEvents(){
   once('btn-draw', () => {
     const teamEl = document.getElementById('in-team');
     const timerEl = document.getElementById('in-timer');
+    const rosterEl = document.getElementById('in-roster');
+    const captainEl = document.getElementById('in-captain');
     state.teamName = teamEl ? teamEl.value.trim() : '';
     const t = timerEl ? parseInt(timerEl.value,10) : 60;
     state.timerDuration = (t && t>=10 && t<=300) ? t : 60;
+    state.teamRoster = rosterEl ? rosterEl.value.split(',').map(s=>s.trim()).filter(Boolean) : [];
+    state.captain = captainEl ? captainEl.value.trim() : '';
     drawGame();
     render();
   });
   once('btn-spin', onSpinClick);
-  once('btn-bonus-answer', () => { state.roundPhase = 'bonus-answer'; render(); });
-  once('btn-bonus-continue', afterBonus);
   once('btn-read-question', () => { state.roundPhase = 'question'; safeSave(); render(); });
   once('btn-start-timer', startTimer);
   once('btn-pause-resume', () => { timerState.running ? pauseTimer() : resumeTimer(); });
@@ -3113,6 +3391,26 @@ function attachEvents(){
   once('btn-new-game', () => { drawGame(); render(); });
   once('btn-to-setup', backToSetup);
   once('btn-install', onInstallClick);
+
+  // Блиц / Суперблиц
+  document.querySelectorAll('.roster-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const input = document.getElementById('in-blitz-player');
+      if(input) input.value = chip.getAttribute('data-name') || '';
+      document.querySelectorAll('.roster-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+  once('btn-blitz-player-go', () => {
+    const el = document.getElementById('in-blitz-player');
+    selectBlitzPlayer(el ? el.value : '');
+  });
+  once('btn-blitz-start', startBlitzSequence);
+  once('btn-blitz-timer-start', startBlitzTimer);
+  once('btn-blitz-answered', stopBlitzEarly);
+  once('btn-blitz-correct', () => judgeBlitz(true));
+  once('btn-blitz-wrong', () => judgeBlitz(false));
+  once('btn-blitz-confirm', scoreBlitzRound);
 }
 
 
@@ -3190,14 +3488,15 @@ safeLoad();
 setupPWA();
 if(state.phase !== 'setup'){
   // при обновлении страницы посреди игры - безопаснее вернуться к настройке,
-  // но сохраняем накопленную историю сыгранных вопросов и счётчик волчка
+  // но сохраняем накопленную историю сыгранных вопросов, счётчик волчка и
+  // данные команды, чтобы не вводить их заново в этот же вечер
   const played = state.playedQuestionIds;
-  const playedBonus = state.playedBonusIndexes;
   const wheel = state.wheelRotation;
+  const teamName = state.teamName, teamRoster = state.teamRoster, captain = state.captain, timerDuration = state.timerDuration;
   state = freshState();
   state.playedQuestionIds = played;
-  state.playedBonusIndexes = playedBonus;
   state.wheelRotation = wheel;
+  state.teamName = teamName; state.teamRoster = teamRoster; state.captain = captain; state.timerDuration = timerDuration;
 }
 render();
 </script>
