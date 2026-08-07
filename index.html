@@ -2713,10 +2713,9 @@ function onSpinClick(){
 const timerState = { endsAt:null, remainingMs:null, running:false, rafId:null, durationMs:60000 };
 
 function isZeroDiscussionRound(){
-  // счёт 5:5 - ведущий по регламенту принудительно забирает минуту на
-  // обсуждение; то же самое происходит, если команда уже должна "вернуть"
-  // взятую ранее минуту в кредит (см. requestCreditMinute)
-  return state.zeroDiscussionNext || (state.scoreExperts === 5 && state.scoreViewers === 5);
+  // раунд без обсуждения - только возврат ранее взятой "минуты в кредит"
+  // (см. requestCreditMinute). Отдельного правила на счёт 5:5 нет.
+  return state.zeroDiscussionNext;
 }
 
 function startTimer(){
@@ -3171,7 +3170,7 @@ function renderRound(){
   let body = '';
 
   if(rp === 'intro'){
-    body = (isZeroDiscussionRound() ? `<div class="banner">⚠ Этот раунд — без обсуждения${state.scoreExperts===5&&state.scoreViewers===5?' (счёт 5:5)':' (возврат «минуты в кредит»)'}</div>` : '') + renderWheel();
+    body = (isZeroDiscussionRound() ? `<div class="banner">⚠ Этот раунд — без обсуждения (возврат «минуты в кредит»)</div>` : '') + renderWheel();
   } else if(rp === 'flavor'){
     body = q._kind === 'internet' ? `
     <div class="card flavor-card">
