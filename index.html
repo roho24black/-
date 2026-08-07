@@ -189,7 +189,8 @@
 
   /* ---------- timer ---------- */
   .timer-zone{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:8px 0; }
-  .timer-ring-wrap{ position:relative; width:min(58vw,240px); height:min(58vw,240px); }
+  .timer-ring-wrap{ position:relative; width:min(50vw,210px); height:min(50vw,210px); }
+  .timer-ring-wrap.compact{ width:min(38vw,160px); height:min(38vw,160px); }
   .timer-ring-wrap svg{ width:100%; height:100%; transform:rotate(-90deg); }
   .timer-ring-bg{ fill:none; stroke:var(--ring-bg); stroke-width:12; }
   .timer-ring-fg{ fill:none; stroke:var(--gold); stroke-width:12; stroke-linecap:round; transition:stroke .3s ease; }
@@ -197,6 +198,7 @@
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     font-size:clamp(38px,11vw,56px); font-weight:800; font-family:-apple-system,system-ui,sans-serif;
   }
+  .timer-ring-wrap.compact .timer-digits{ font-size:clamp(28px,7.5vw,38px); }
   .timer-ring-fg.warn{ stroke:#e0b23a; }
   .timer-ring-fg.danger{ stroke:var(--red-light); }
   .timer-digits.danger{ color:var(--red-light); }
@@ -2819,7 +2821,17 @@ function stopEarly(){
   // "Досрочный ответ" во время основного отсчёта: знатоки готовы раньше
   // времени — по правилам это даёт им дополнительную минуту на то, чтобы
   // сформулировать точный ответ, а не мгновенно завершает раунд.
+  // Исключение: если команда уже взяла «минуту в кредит» на этот же раунд,
+  // вторую бонусную минуту сверху не даём — иначе на одном вопросе
+  // набегает 3 минуты обсуждения подряд, что не соответствует регламенту.
   if(timerState.rafId) cancelAnimationFrame(timerState.rafId);
+  timerState.running = false;
+  if(state.creditMinuteUsedThisRound){
+    state.roundPhase = 'answer-ready';
+    safeSave();
+    render();
+    return;
+  }
   state.usedBonusMinute = true;
   state.bonusSecondsUsed = null;
   timerState.durationMs = 60000;
@@ -3219,7 +3231,7 @@ function renderRound(){
       <div class="question-text" style="font-size:clamp(15px,4vw,17px); opacity:.85;">${nl2br(bq.question)}</div>
     </div>
     <div class="timer-zone">
-      <div class="timer-ring-wrap">
+      <div class="timer-ring-wrap compact">
         <svg viewBox="0 0 120 120">
           <circle class="timer-ring-bg" cx="60" cy="60" r="54"/>
           <circle class="timer-ring-fg" id="timer-ring-fg" cx="60" cy="60" r="54"/>
@@ -3228,8 +3240,8 @@ function renderRound(){
       </div>
     </div>
     <div class="action-bar">
-      <button class="btn btn-outline btn-block" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
       <button class="btn btn-gold btn-block" id="btn-blitz-answered">Ответили!</button>
+      <button class="btn btn-ghost btn-sm" id="btn-pause-resume" style="align-self:center;">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
     </div>`;
   } else if(rp === 'blitz-answer'){
     const isSuper = q._kind === 'superblitz';
@@ -3287,8 +3299,8 @@ function renderRound(){
       ${state.creditMinuteUsedThisRound ? `<div class="debt-note">взята «минута в кредит»</div>` : ''}
     </div>
     <div class="action-bar">
-      <button class="btn btn-outline btn-block" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
       <button class="btn btn-gold btn-block" id="btn-early-answer">🔔 Досрочный ответ</button>
+      <button class="btn btn-ghost btn-sm" id="btn-pause-resume" style="align-self:center;">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
     </div>`;
   } else if(rp === 'bonusMinute' || rp === 'bonusMinutePaused'){
     const paused = rp === 'bonusMinutePaused';
@@ -3307,8 +3319,8 @@ function renderRound(){
       </div>
     </div>
     <div class="action-bar">
-      <button class="btn btn-outline btn-block" id="btn-pause-resume">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
       <button class="btn btn-gold btn-block" id="btn-bonus-minute-done">✅ Ответ готов</button>
+      <button class="btn btn-ghost btn-sm" id="btn-pause-resume" style="align-self:center;">${paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
     </div>`;
   } else if(rp === 'answer-ready'){
     const readyMsg = state.usedBonusMinute
