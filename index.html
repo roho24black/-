@@ -559,98 +559,146 @@ function computeRows(){
   return row;
 }
 
+/* Раскладка дерева — классическая двухпроходная схема (снизу вверх
+   считаем нужную ширину, сверху вниз расставляем координаты), а не
+   "куда обход дошёл, туда и поставили". Благодаря этому:
+   - каждый родитель встаёт РОВНО по центру над своими детьми (а не у
+     левого края блока, из-за чего линии выглядели перекошенными);
+   - ширина каждого поддерева резервируется заранее, так что ветки
+     никогда не наезжают друг на друга;
+   - человек, у которого есть свои известные родители, всегда получает
+     позицию через СВОЮ родительскую ветку, а не через ветку супруга
+     (супруг без известных родителей обрабатывается первым в обходе не
+     "перетягивает" его к себе). */
 function computeLayout(){
   const rowOf = computeRows();
   const visited = new Set();
   const processedCouples = new Set();
-  const positions = {}; // id -> {x, depth}
   const marriageEdges = []; // {a,b}
-  const childEdges = []; // {parentAId, parentBId(or null), childIds}
-  const cursor = { v: 0 };
-  let maxDepth = 0;
+  const childEdgesOut = []; // {parentAId, parentBId(or null), childIds}
 
   function coupleKey(a,b){ return [a,b].sort().join("~"); }
-
-  function place(id){
-    const x = cursor.v; cursor.v += 1;
-    const depth = rowOf[id] || 0;
-    positions[id] = { x: x + 0.5, depth };
-    maxDepth = Math.max(maxDepth, depth);
+  function sortChildren(ids){
+    // сначала дети без собственной семьи (листья), потом те, у кого уже
+    // есть свои дети — иначе "тяжёлый" по потомкам ребёнок отталкивает
+    // более простых братьев/сестёр далеко в сторону
+    return ids.slice().sort((a,b) => {
+      const wa = children(a).length ? 1 : 0;
+      const wb = children(b).length ? 1 : 0;
+      if (wa !== wb) return wa - wb;
+      const ya = parseInt(yearOf(P(a).birthDate)) || 9999;
+      const yb = parseInt(yearOf(P(b).birthDate)) || 9999;
+      return ya - yb;
+    });
   }
-
-  function layoutUnit(id){
-    if (visited.has(id)) return;
-    visited.add(id);
-    place(id);
-    placeChain(id);
-  }
-
-  function placeChain(anchorId){
-    const groups = coParentGroups(anchorId);
-    // порядок: сначала группы с детьми (по году рождения первого ребёнка), затем бездетные браки
-    groups.sort((g1,g2) => {
+  function sortGroups(groups){
+    return groups.slice().sort((g1,g2) => {
       const y1 = g1.childIds.length ? Math.min(...g1.childIds.map(id=>parseInt(yearOf(P(id).birthDate))||9999)) : 9999;
       const y2 = g2.childIds.length ? Math.min(...g2.childIds.map(id=>parseInt(yearOf(P(id).birthDate))||9999)) : 9999;
       return y1 - y2;
     });
+  }
+
+  // ---- Проход 1: строим "лес" юнитов (кто за кем идёт), без координат ----
+  function buildUnit(id){
+    if (visited.has(id)) return null;
+    visited.add(id);
+    const unit = { id, blocks: [] };
+    extendChain(id, unit.blocks);
+    return unit;
+  }
+  function extendChain(anchorId, blocksArr){
+    const groups = sortGroups(coParentGroups(anchorId));
     for (const g of groups){
       const key = g.partnerId ? coupleKey(anchorId, g.partnerId) : null;
       if (key){
         if (processedCouples.has(key)) continue;
         processedCouples.add(key);
       }
-      let partnerPlacedNow = false;
+      let partnerFresh = false;
       if (g.partnerId && P(g.partnerId)){
         const partner = P(g.partnerId);
         const partnerHasOwnAncestry = !!(partner.fatherId || partner.motherId);
         if (!visited.has(g.partnerId) && !partnerHasOwnAncestry){
-          // у партнёра самого нет известных родителей — можно спокойно
-          // поставить его прямо тут, рядом с anchor
           visited.add(g.partnerId);
-          place(g.partnerId);
-          partnerPlacedNow = true;
+          partnerFresh = true;
         }
-        // если у партнёра ЕСТЬ свои родители — не занимаем его место здесь.
-        // Раньше это делалось всегда: кто первым в обходе "дотягивался" до
-        // человека (например, через брак), тот и определял его позицию —
-        // и если супруг(а) без родителей обрабатывался раньше собственной
-        // родительской ветки человека, того утаскивало далеко в сторону от
-        // родных, а линия к нему растягивалась через всё дерево. Теперь он
-        // ждёт, пока до него доберётся его СОБСТВЕННАЯ родительская ветка
-        // (в этом же проходе раскладки — раньше или позже, не важно), а
-        // линия брака всё равно найдёт его настоящую позицию к моменту
-        // отрисовки, потому что позиции читаются уже после полного расчёта.
         marriageEdges.push({ a: anchorId, b: g.partnerId });
       }
+      const childUnits = [];
       if (g.childIds.length){
-        // сначала — дети без собственной семьи (листья), потом — те, у кого
-        // есть свои дети/супруги: иначе "тяжёлый" по потомкам ребёнок
-        // разворачивается первым и отталкивает соседей далеко в сторону,
-        // а соединительная линия к ним растягивается через всё дерево
-        const sorted = g.childIds.slice().sort((a,b) => {
-          const wa = children(a).length ? 1 : 0;
-          const wb = children(b).length ? 1 : 0;
-          if (wa !== wb) return wa - wb;
-          const ya = parseInt(yearOf(P(a).birthDate)) || 9999;
-          const yb = parseInt(yearOf(P(b).birthDate)) || 9999;
-          return ya - yb;
-        });
-        for (const cid of sorted) layoutUnit(cid);
-        childEdges.push({ parentAId: anchorId, parentBId: g.partnerId, childIds: sorted });
+        for (const cid of sortChildren(g.childIds)){
+          const cu = buildUnit(cid);
+          if (cu) childUnits.push(cu);
+        }
       }
-      if (partnerPlacedNow){
-        placeChain(g.partnerId);
+      const block = { anchorId, partnerId: g.partnerId || null, partnerFresh, childUnits };
+      blocksArr.push(block);
+      if (g.childIds.length){
+        childEdgesOut.push({ parentAId: anchorId, parentBId: g.partnerId || null, childIds: childUnits.map(cu => cu.id) });
+      }
+      if (partnerFresh){
+        extendChain(g.partnerId, blocksArr); // продолжаем цепочку (повторный брак) в той же строке
       }
     }
   }
 
-  // корни: люди без известных родителей, в порядке появления
+  const forest = [];
   const roots = allPersons().filter(p => !p.fatherId && !p.motherId);
-  for (const r of roots){ layoutUnit(r.id); }
+  for (const r of roots){ const u = buildUnit(r.id); if (u) forest.push(u); }
   // подстраховка: кто-то не попал (битые ссылки на несуществующих родителей)
-  for (const p of allPersons()){ if (!visited.has(p.id)) layoutUnit(p.id); }
+  for (const p of allPersons()){ if (!visited.has(p.id)){ const u = buildUnit(p.id); if (u) forest.push(u); } }
 
-  return { positions, marriageEdges, childEdges, width: cursor.v, maxDepth };
+  // ---- Проход 2: снизу вверх считаем ширину (в "слотах") каждого юнита ----
+  function computeWidth(unit){
+    let blocksWidth = 0;
+    for (const block of unit.blocks){
+      let kidsW = 0;
+      for (const cu of block.childUnits) kidsW += computeWidth(cu);
+      block.width = Math.max(kidsW, block.partnerFresh ? 1 : 0);
+      blocksWidth += block.width;
+    }
+    unit.width = Math.max(blocksWidth, 1);
+    return unit.width;
+  }
+  for (const u of forest) computeWidth(u);
+
+  // ---- Проход 3: сверху вниз расставляем координаты, центрируя каждого
+  //      родителя (и каждого "пристёгнутого" по цепочке партнёра) над
+  //      суммарной шириной того, что от него зависит ----
+  const positions = {};
+  function assignPositions(unit, offset){
+    if (!unit.blocks.length){
+      positions[unit.id] = { x: offset + 0.5, depth: rowOf[unit.id] || 0 };
+      return;
+    }
+    let cursor = offset;
+    const spans = new Map(); // anchorId/partnerId -> {start,end}
+    function extendSpan(id, start, end){
+      const s = spans.get(id);
+      if (s){ s.start = Math.min(s.start, start); s.end = Math.max(s.end, end); }
+      else spans.set(id, { start, end });
+    }
+    for (const block of unit.blocks){
+      const blockStart = cursor;
+      for (const cu of block.childUnits){
+        assignPositions(cu, cursor);
+        cursor += cu.width;
+      }
+      if (!block.childUnits.length) cursor += block.width;
+      const blockEnd = Math.max(cursor, blockStart);
+      extendSpan(block.anchorId, blockStart, blockEnd);
+      if (block.partnerFresh) extendSpan(block.partnerId, blockStart, blockEnd);
+    }
+    for (const [id, span] of spans){
+      positions[id] = { x: (span.start + span.end) / 2, depth: rowOf[id] || 0 };
+    }
+  }
+  let cursorTop = 0;
+  for (const u of forest){ assignPositions(u, cursorTop); cursorTop += u.width; }
+
+  const maxDepth = Math.max(0, ...Object.values(rowOf));
+  return { positions, marriageEdges, childEdges: childEdgesOut, width: cursorTop, maxDepth };
 }
 
 function svgEl(tag, attrs){
