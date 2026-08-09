@@ -578,7 +578,6 @@ function computeLayout(){
   const visited = new Set();
   const processedCouples = new Set();
   const marriageEdges = []; // {a,b} — супруги стоят рядом, обычная короткая линия
-  const longMarriageEdges = []; // {a,b} — супруг(а) размещён(а) отдельно, у своих родителей: соединяем большой стрелкой через всё дерево
   const childEdgesOut = []; // {parentAId, parentBId(or null), childIds}
 
   function coupleKey(a,b){ return [a,b].sort().join("~"); }
@@ -641,9 +640,9 @@ function computeLayout(){
         // родители, не занимаем его место здесь: пусть его правильно
         // разместит его СОБСТВЕННАЯ родительская ветка — связь "ребёнок →
         // его настоящие родители" важнее соседства супругов, это пропадать
-        // не должно. Дерево остаётся цельным (без дублирующих карточек):
-        // супругов, которые не могут встать рядом, просто соединяет одна
-        // большая стрелка через всё дерево, от их настоящих позиций.
+        // не должно. Такого супруга никакой линией через всё дерево не
+        // соединяем (это и выглядело криво, и захламляло дерево) — его имя
+        // и так видно текстом на карточке ("⚭ …").
         const partnerHasOwnAncestry = !!(P(g.partnerId).fatherId || P(g.partnerId).motherId);
         if (!visited.has(g.partnerId) && !partnerHasOwnAncestry){
           visited.add(g.partnerId);
@@ -651,7 +650,6 @@ function computeLayout(){
           marriageEdges.push({ a: anchorId, b: g.partnerId });
         } else {
           partnerElsewhere = true;
-          longMarriageEdges.push({ a: anchorId, b: g.partnerId });
         }
       }
       const childUnits = [];
@@ -784,7 +782,7 @@ function computeLayout(){
   if (forest.length) cursorTop -= FOREST_GAP;
 
   const maxDepth = Math.max(0, ...Object.values(rowOf));
-  return { positions, marriageEdges, longMarriageEdges, coupleSlots, childEdges: childEdgesOut, width: cursorTop, maxDepth };
+  return { positions, marriageEdges, coupleSlots, childEdges: childEdgesOut, width: cursorTop, maxDepth };
 }
 
 function svgEl(tag, attrs){
@@ -821,16 +819,6 @@ function renderTree(){
 
   function px(slotX){ return PAD + slotX * SLOT_W; }
   function py(depth){ return PAD + depth * ROW_H; }
-
-  const defs = svgEl("defs", {});
-  const arrowMarker = svgEl("marker", {
-    id: "marriageArrowHead", viewBox: "0 0 10 10", refX: "8", refY: "5",
-    markerWidth: "8", markerHeight: "8", orient: "auto-start-reverse"
-  });
-  const arrowPath = svgEl("path", { d: "M0,0 L10,5 L0,10 z", fill: "var(--accent-2)" });
-  arrowMarker.appendChild(arrowPath);
-  defs.appendChild(arrowMarker);
-  svg.appendChild(defs);
 
   const linesLayer = svgEl("g", {});
   const nodesLayer = svgEl("g", {});
@@ -911,40 +899,10 @@ function renderTree(){
     fo.appendChild(div);
     nodesLayer.appendChild(fo);
   }
-
-  // супруги, размещённые отдельно (каждый у своих родителей) — соединяем
-  // их настоящие позиции одной большой двусторонней стрелкой прямо через
-  // дерево: дерево остаётся цельным, без дублирующих карточек-заглушек
-  const marriageArrowAttrs = {
-    stroke: "var(--accent-2)", "stroke-width": 3,
-    "marker-start": "url(#marriageArrowHead)", "marker-end": "url(#marriageArrowHead)"
-  };
-  for (const e of layout.longMarriageEdges){
-    const a = layout.positions[e.a], b = layout.positions[e.b];
-    if (!a || !b) continue;
-    if (a.depth === b.depth){
-      // одна строка: если между ними стоят другие карточки, прямая линия
-      // прошла бы прямо сквозь них — вместо этого уводим стрелку вниз,
-      // "нырком" под ряд, и обратно вверх к партнёру
-      const ax = px(a.x), bx = px(b.x);
-      const bottomY = py(a.depth) + NODE_H;
-      const startY = bottomY + 4, dipY = bottomY + 26;
-      linesLayer.appendChild(svgEl("path", Object.assign({
-        d: `M ${ax} ${startY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${startY}`,
-        fill: "none", "stroke-linejoin": "round"
-      }, marriageArrowAttrs)));
-    } else {
-      const ax = px(a.x), ay = py(a.depth) + NODE_H/2;
-      const bx = px(b.x), by = py(b.depth) + NODE_H/2;
-      const dx = bx - ax, dy = by - ay;
-      const dist = Math.hypot(dx, dy) || 1;
-      const ux = dx/dist, uy = dy/dist;
-      const gap = NODE_W/2 + 10;
-      linesLayer.appendChild(svgEl("line", Object.assign({
-        x1: ax + ux*gap, y1: ay + uy*gap, x2: bx - ux*gap, y2: by - uy*gap
-      }, marriageArrowAttrs)));
-    }
-  }
+  // супруг(а), размещённый(ая) отдельно (у своих родителей), намеренно НЕ
+  // соединяется никакой линией через всё дерево — это и выглядело криво,
+  // и захламляло картину. Имя супруга и так видно текстом на карточке
+  // ("⚭ …"), этого достаточно, как в обычных генеалогических деревьях.
 }
 
 function escapeHtml(s){
@@ -1625,20 +1583,6 @@ function buildExportSvg(layout, w, h, colors){
   bg.setAttribute("fill", colors.bg);
   svg.appendChild(bg);
 
-  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
-  const arrowMarker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
-  arrowMarker.setAttribute("id", "marriageArrowHeadExp");
-  arrowMarker.setAttribute("viewBox", "0 0 10 10");
-  arrowMarker.setAttribute("refX", "8"); arrowMarker.setAttribute("refY", "5");
-  arrowMarker.setAttribute("markerWidth", "8"); arrowMarker.setAttribute("markerHeight", "8");
-  arrowMarker.setAttribute("orient", "auto-start-reverse");
-  const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  arrowPath.setAttribute("d", "M0,0 L10,5 L0,10 z");
-  arrowPath.setAttribute("fill", colors.accent2);
-  arrowMarker.appendChild(arrowPath);
-  defs.appendChild(arrowMarker);
-  svg.appendChild(defs);
-
   function px(slotX){ return PAD + slotX * SLOT_W; }
   function py(depth){ return PAD + depth * ROW_H; }
 
@@ -1717,41 +1661,8 @@ function buildExportSvg(layout, w, h, colors){
     }
   }
 
-  // супруги, размещённые отдельно — соединяем настоящие позиции большой
-  // двусторонней стрелкой (та же логика, что и в дереве на экране)
-  for (const e of (layout.longMarriageEdges || [])){
-    const a = layout.positions[e.a], b = layout.positions[e.b];
-    if (!a || !b) continue;
-    if (a.depth === b.depth){
-      // одна строка: нырком уводим стрелку под ряд, чтобы не пересекать
-      // карточки, стоящие между супругами
-      const ax = px(a.x), bx = px(b.x);
-      const bottomY = py(a.depth) + NODE_H;
-      const startY = bottomY + 4, dipY = bottomY + 26;
-      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      p.setAttribute("d", `M ${ax} ${startY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${startY}`);
-      p.setAttribute("fill", "none");
-      p.setAttribute("stroke-linejoin", "round");
-      p.setAttribute("stroke", colors.accent2); p.setAttribute("stroke-width", 3);
-      p.setAttribute("marker-start", "url(#marriageArrowHeadExp)");
-      p.setAttribute("marker-end", "url(#marriageArrowHeadExp)");
-      linesG.appendChild(p);
-    } else {
-      const ax = px(a.x), ay = py(a.depth) + NODE_H/2;
-      const bx = px(b.x), by = py(b.depth) + NODE_H/2;
-      const dx = bx - ax, dy = by - ay;
-      const dist = Math.hypot(dx, dy) || 1;
-      const ux = dx/dist, uy = dy/dist;
-      const gap = NODE_W/2 + 10;
-      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      l.setAttribute("x1", ax + ux*gap); l.setAttribute("y1", ay + uy*gap);
-      l.setAttribute("x2", bx - ux*gap); l.setAttribute("y2", by - uy*gap);
-      l.setAttribute("stroke", colors.accent2); l.setAttribute("stroke-width", 3);
-      l.setAttribute("marker-start", "url(#marriageArrowHeadExp)");
-      l.setAttribute("marker-end", "url(#marriageArrowHeadExp)");
-      linesG.appendChild(l);
-    }
-  }
+  // супруг(а), размещённый(ая) отдельно, намеренно не соединяется никакой
+  // линией через всё дерево — имя супруга и так видно текстом на карточке
   return svg;
 }
 
