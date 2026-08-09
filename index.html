@@ -1016,13 +1016,17 @@ function renderTree(){
   for (const e of layout.fallbackConnectors){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     if (!a || !b) continue;
-    const ax = px(e.pairX != null ? e.pairX : a.x), bx = px(b.x);
+    // сдвигаем начало веточки чуть в сторону от точки, откуда падает
+    // ствол к детям, и ныряем НИЖЕ его горизонтальной перекладины — иначе
+    // обе линии накладываются друг на друга и на глаз сливаются в
+    // маленькую петлю ("глюк"), а не читаются как две разные линии
+    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
     if (a.depth === b.depth){
       const bottomY = py(a.depth) + NODE_H;
-      const dipY = bottomY + 22;
+      const dipY = bottomY + 34;
       linesLayer.appendChild(svgEl("path", {
         d: `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`,
-        fill: "none", stroke: "var(--accent-2)", "stroke-width": 2, "stroke-linejoin": "round"
+        fill: "none", stroke: "var(--accent-2)", "stroke-width": 2
       }));
     } else {
       const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
@@ -1792,14 +1796,13 @@ function buildExportSvg(layout, w, h, colors){
   for (const e of (layout.fallbackConnectors || [])){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     if (!a || !b) continue;
-    const ax = px(e.pairX != null ? e.pairX : a.x), bx = px(b.x);
+    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
     if (a.depth === b.depth){
       const bottomY = py(a.depth) + NODE_H;
-      const dipY = bottomY + 22;
+      const dipY = bottomY + 34;
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`);
       p.setAttribute("fill", "none");
-      p.setAttribute("stroke-linejoin", "round");
       p.setAttribute("stroke", colors.accent2); p.setAttribute("stroke-width", 2);
       linesG.appendChild(p);
     } else {
