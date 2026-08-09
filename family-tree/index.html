@@ -601,15 +601,36 @@ function computeLayout(){
       }
       let partnerPlacedNow = false;
       if (g.partnerId && P(g.partnerId)){
-        if (!visited.has(g.partnerId)){
+        const partner = P(g.partnerId);
+        const partnerHasOwnAncestry = !!(partner.fatherId || partner.motherId);
+        if (!visited.has(g.partnerId) && !partnerHasOwnAncestry){
+          // у партнёра самого нет известных родителей — можно спокойно
+          // поставить его прямо тут, рядом с anchor
           visited.add(g.partnerId);
           place(g.partnerId);
-          marriageEdges.push({ a: anchorId, b: g.partnerId });
           partnerPlacedNow = true;
         }
+        // если у партнёра ЕСТЬ свои родители — не занимаем его место здесь.
+        // Раньше это делалось всегда: кто первым в обходе "дотягивался" до
+        // человека (например, через брак), тот и определял его позицию —
+        // и если супруг(а) без родителей обрабатывался раньше собственной
+        // родительской ветки человека, того утаскивало далеко в сторону от
+        // родных, а линия к нему растягивалась через всё дерево. Теперь он
+        // ждёт, пока до него доберётся его СОБСТВЕННАЯ родительская ветка
+        // (в этом же проходе раскладки — раньше или позже, не важно), а
+        // линия брака всё равно найдёт его настоящую позицию к моменту
+        // отрисовки, потому что позиции читаются уже после полного расчёта.
+        marriageEdges.push({ a: anchorId, b: g.partnerId });
       }
       if (g.childIds.length){
+        // сначала — дети без собственной семьи (листья), потом — те, у кого
+        // есть свои дети/супруги: иначе "тяжёлый" по потомкам ребёнок
+        // разворачивается первым и отталкивает соседей далеко в сторону,
+        // а соединительная линия к ним растягивается через всё дерево
         const sorted = g.childIds.slice().sort((a,b) => {
+          const wa = children(a).length ? 1 : 0;
+          const wb = children(b).length ? 1 : 0;
+          if (wa !== wb) return wa - wb;
           const ya = parseInt(yearOf(P(a).birthDate)) || 9999;
           const yb = parseInt(yearOf(P(b).birthDate)) || 9999;
           return ya - yb;
