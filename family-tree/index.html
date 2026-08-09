@@ -156,6 +156,18 @@ main{flex:1; display:flex; flex-direction:column; min-height:0;}
 .node-box .pl{font-size:10px; color:var(--muted);}
 .node-box .sp{font-size:10px; color:var(--accent-2); margin-top:2px;}
 
+/* карточка-ссылка: замещает супруга в этом месте дерева, когда он сам
+   уже размещён (или будет размещён) у своих родителей — клик уводит туда */
+.ref-chip{
+  width:130px; min-height:40px; border-radius:10px; border:2px dashed var(--unknown);
+  background:transparent; padding:5px 8px; font-size:10.5px; line-height:1.3;
+  cursor:pointer; color:var(--muted); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; text-align:center; user-select:none;
+}
+.ref-chip:hover{border-color:var(--accent-2); color:var(--accent-2);}
+.ref-chip .rc-nm{font-weight:600; color:var(--ink);}
+.ref-chip .rc-go{font-size:9.5px;}
+
 /* modals */
 .modal-overlay{
   position:fixed; inset:0; background:rgba(20,15,8,.5); z-index:100;
@@ -632,26 +644,25 @@ function computeLayout(){
         processedCouples.add(key);
       }
       let partnerFresh = false;
+      let needsRefChip = false;
       if (g.partnerId && P(g.partnerId)){
         // Партнёра ставим рядом СРАЗУ, только если у него самого нет своих
         // известных родителей — тогда ему больше неоткуда взять позицию,
         // кроме как рядом с супругом(ой). Если же у партнёра ЕСТЬ свои
         // родители, не занимаем его место здесь: пусть его правильно
-        // разместит его СОБСТВЕННАЯ родительская ветка (в этом же проходе,
-        // раньше или позже) — связь "ребёнок → его настоящие родители"
-        // важнее соседства супругов. Раньше это правило уже было и его
-        // намеренно ослабили ради соседства пар — но это оказалось хуже:
-        // человека могло "перехватить" в соседи чужому супругу раньше, чем
-        // до него доберётся его собственная ветка, и линия к его РОДНЫМ
-        // родителям пропадала совсем (а не просто становилась длиннее).
-        // Пропавшая связь с роднёй — куда более заметная и серьёзная
-        // ошибка, чем чуть менее плотное соседство супругов.
+        // разместит его СОБСТВЕННАЯ родительская ветка — связь "ребёнок →
+        // его настоящие родители" важнее соседства супругов, это пропадать
+        // не должно. Но чтобы супруг(а) при этом не "терялся" визуально,
+        // вместо него/неё здесь встаёт маленькая карточка-ссылка (клик —
+        // переход к настоящей позиции), а не пустое место.
         const partnerHasOwnAncestry = !!(P(g.partnerId).fatherId || P(g.partnerId).motherId);
         if (!visited.has(g.partnerId) && !partnerHasOwnAncestry){
           visited.add(g.partnerId);
           partnerFresh = true;
+          marriageEdges.push({ a: anchorId, b: g.partnerId });
+        } else {
+          needsRefChip = true;
         }
-        marriageEdges.push({ a: anchorId, b: g.partnerId });
       }
       const childUnits = [];
       if (g.childIds.length){
@@ -660,7 +671,7 @@ function computeLayout(){
           if (cu) childUnits.push(cu);
         }
       }
-      const block = { anchorId, partnerId: g.partnerId || null, partnerFresh, childUnits };
+      const block = { anchorId, partnerId: g.partnerId || null, partnerFresh, needsRefChip, childUnits };
       blocksArr.push(block);
       if (g.childIds.length){
         childEdgesOut.push({ parentAId: anchorId, parentBId: g.partnerId || null, childIds: childUnits.map(cu => cu.id) });
@@ -711,7 +722,9 @@ function computeLayout(){
       let kidsW = 0;
       for (const cu of block.childUnits) kidsW += computeWidth(cu);
       block.kidsWidth = kidsW;
-      block.width = block.partnerFresh ? Math.max(kidsW, 2) : kidsW;
+      // и свежему партнёру, и карточке-ссылке на "занятого" партнёра нужен
+      // свой слот рядом с self — резервируем минимум 2, как и раньше
+      block.width = (block.partnerFresh || block.needsRefChip) ? Math.max(kidsW, 2) : kidsW;
       blocksWidth += block.width;
     }
     unit.width = Math.max(blocksWidth, 1);
@@ -723,14 +736,15 @@ function computeLayout(){
   //      родителя (и каждого "пристёгнутого" по цепочке партнёра) над
   //      суммарной шириной того, что от него зависит ----
   const positions = {};
+  const refChips = []; // {id, targetId, x, depth} — маленькая карточка-ссылка вместо занятого партнёра
   function assignPositions(unit, offset){
     if (!unit.blocks.length){
       positions[unit.id] = { x: offset + 0.5, depth: rowOf[unit.id] || 0 };
       return;
     }
     let cursor = offset;
-    const spans = new Map(); // anchorId -> {start,end}, для центрирования self над блоками БЕЗ свежего партнёра
-    const fixedX = new Map(); // anchorId -> x, когда есть блок со свежим партнёром (там self не "плавает")
+    const spans = new Map(); // anchorId -> {start,end}, для центрирования self над блоками БЕЗ свежего партнёра/ссылки
+    const fixedX = new Map(); // anchorId -> x, когда рядом стоит партнёр или карточка-ссылка (там self не "плавает")
     function extendSpan(id, start, end){
       const s = spans.get(id);
       if (s){ s.start = Math.min(s.start, start); s.end = Math.max(s.end, end); }
@@ -738,16 +752,20 @@ function computeLayout(){
     }
     for (const block of unit.blocks){
       const blockStart = cursor;
-      if (block.partnerFresh){
+      if (block.partnerFresh || block.needsRefChip){
         // дети центрируются внутри зарезервированной ширины блока (она
-        // не меньше 2, даже если детей мало/нет), а self и партнёр —
-        // вплотную друг к другу, ровно по центру над детьми
+        // не меньше 2, даже если детей мало/нет), а self и партнёр (или
+        // карточка-ссылка на него) — вплотную друг к другу, по центру
         const kidsOffset = blockStart + (block.width - block.kidsWidth) / 2;
         let kc = kidsOffset;
         for (const cu of block.childUnits){ assignPositions(cu, kc); kc += cu.width; }
         const pairCenter = blockStart + block.width / 2;
         fixedX.set(block.anchorId, pairCenter - 0.5);
-        positions[block.partnerId] = { x: pairCenter + 0.5, depth: rowOf[block.partnerId] || 0 };
+        if (block.partnerFresh){
+          positions[block.partnerId] = { x: pairCenter + 0.5, depth: rowOf[block.partnerId] || 0 };
+        } else {
+          refChips.push({ id: "chip-" + block.anchorId + "-" + block.partnerId, anchorId: block.anchorId, targetId: block.partnerId, x: pairCenter + 0.5, depth: rowOf[block.anchorId] || 0 });
+        }
         cursor = blockStart + block.width;
       } else {
         for (const cu of block.childUnits){ assignPositions(cu, cursor); cursor += cu.width; }
@@ -767,7 +785,7 @@ function computeLayout(){
   for (const u of forest){ assignPositions(u, cursorTop); cursorTop += u.width; }
 
   const maxDepth = Math.max(0, ...Object.values(rowOf));
-  return { positions, marriageEdges, childEdges: childEdgesOut, width: cursorTop, maxDepth };
+  return { positions, marriageEdges, childEdges: childEdgesOut, refChips, width: cursorTop, maxDepth };
 }
 
 function svgEl(tag, attrs){
@@ -869,6 +887,31 @@ function renderTree(){
       (p.birthPlace ? '<div class="pl">📍 ' + escapeHtml(p.birthPlace) + '</div>' : "") +
       (spouseNames.length ? '<div class="sp">' + escapeHtml(spouseNames.join(", ")) + '</div>' : "");
     div.addEventListener("click", () => openDetail(p.id));
+    fo.appendChild(div);
+    nodesLayer.appendChild(fo);
+  }
+
+  // карточки-ссылки на "занятых" супругов — короткая пунктирная линия +
+  // компактная кликабельная карточка с именем, ведущая к настоящей позиции
+  for (const chip of layout.refChips){
+    const target = P(chip.targetId);
+    if (!target) continue;
+    const anchorPos = layout.positions[chip.anchorId];
+    if (anchorPos){
+      const y = py(anchorPos.depth) + NODE_H/2;
+      linesLayer.appendChild(svgEl("line", {
+        x1: px(anchorPos.x), y1: y, x2: px(chip.x), y2: y,
+        stroke: "var(--line)", "stroke-width": 2, "stroke-dasharray": "4 4"
+      }));
+    }
+    const chipW = 130;
+    const fo = svgEl("foreignObject", { x: px(chip.x) - chipW/2, y: py(chip.depth), width: chipW, height: NODE_H + 20 });
+    const div = document.createElement("div");
+    div.className = "ref-chip";
+    div.innerHTML =
+      '<div class="rc-nm">' + escapeHtml(fullName(target)) + '</div>' +
+      '<div class="rc-go">⚭ у своих родителей →</div>';
+    div.addEventListener("click", () => locateOnTree(chip.targetId));
     fo.appendChild(div);
     nodesLayer.appendChild(fo);
   }
@@ -1621,6 +1664,33 @@ function buildExportSvg(layout, w, h, colors){
       nodesG.appendChild(svgText(cx, ty, ln.t, attrs));
       ty += lineH;
     }
+  }
+
+  // карточки-ссылки на "занятых" супругов (та же дуга, что и в дереве на экране)
+  for (const chip of (layout.refChips || [])){
+    const target = P(chip.targetId);
+    if (!target) continue;
+    const anchorPos = layout.positions[chip.anchorId];
+    if (anchorPos){
+      const y = py(anchorPos.depth) + NODE_H/2;
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      l.setAttribute("x1", px(anchorPos.x)); l.setAttribute("y1", y);
+      l.setAttribute("x2", px(chip.x)); l.setAttribute("y2", y);
+      l.setAttribute("stroke", colors.line); l.setAttribute("stroke-width", 2);
+      l.setAttribute("stroke-dasharray", "4 4");
+      linesG.appendChild(l);
+    }
+    const chipW = 130;
+    const cx2 = px(chip.x), cy = py(chip.depth) + NODE_H/2;
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", cx2 - chipW/2); rect.setAttribute("y", cy - 20);
+    rect.setAttribute("width", chipW); rect.setAttribute("height", 40);
+    rect.setAttribute("rx", 10); rect.setAttribute("fill", "none");
+    rect.setAttribute("stroke", colors.unknown); rect.setAttribute("stroke-width", 2);
+    rect.setAttribute("stroke-dasharray", "4 4");
+    nodesG.appendChild(rect);
+    nodesG.appendChild(svgText(cx2, cy - 3, truncateForBox(fullName(target), 18), { "font-size": 11, "font-weight": "600", fill: colors.ink, "font-family": "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" }));
+    nodesG.appendChild(svgText(cx2, cy + 11, "⚭ у своих родителей →", { "font-size": 9, fill: colors.muted, "font-family": "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" }));
   }
   return svg;
 }
