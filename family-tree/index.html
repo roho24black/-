@@ -686,16 +686,17 @@ function computeLayout(){
   for (const p of allPersons()){ if (!visited.has(p.id)){ const u = buildUnit(p.id); if (u) forest.push(u); } }
 
   // ---- Проход 2: снизу вверх считаем ширину (в "слотах") каждого юнита ----
-  // Свежему партнёру всегда резервируем СВОЙ отдельный слот (не тот же,
-  // что и у детей!) — иначе при отсутствии детей или при их малом числе
-  // партнёр и центр родителя совпадали и карточки накладывались друг на
-  // друга ровно в одной точке.
+  // Блоку со свежим партнёром всегда резервируем МИНИМУМ 2 слота (self +
+  // партнёр рядом, вплотную) — даже если детей нет вовсе или он всего
+  // один: иначе self и партнёр могли посчитаться на одном и том же (или
+  // почти одном) месте и карточки накладывались друг на друга.
   function computeWidth(unit){
     let blocksWidth = 0;
     for (const block of unit.blocks){
       let kidsW = 0;
       for (const cu of block.childUnits) kidsW += computeWidth(cu);
-      block.width = (block.partnerFresh ? 1 : 0) + kidsW;
+      block.kidsWidth = kidsW;
+      block.width = block.partnerFresh ? Math.max(kidsW, 2) : kidsW;
       blocksWidth += block.width;
     }
     unit.width = Math.max(blocksWidth, 1);
@@ -713,7 +714,8 @@ function computeLayout(){
       return;
     }
     let cursor = offset;
-    const spans = new Map(); // anchorId -> {start,end}, для центрирования self над всеми его блоками
+    const spans = new Map(); // anchorId -> {start,end}, для центрирования self над блоками БЕЗ свежего партнёра
+    const fixedX = new Map(); // anchorId -> x, когда есть блок со свежим партнёром (там self не "плавает")
     function extendSpan(id, start, end){
       const s = spans.get(id);
       if (s){ s.start = Math.min(s.start, start); s.end = Math.max(s.end, end); }
@@ -722,18 +724,27 @@ function computeLayout(){
     for (const block of unit.blocks){
       const blockStart = cursor;
       if (block.partnerFresh){
-        // отдельный слот под партнёра, до детей
-        positions[block.partnerId] = { x: cursor + 0.5, depth: rowOf[block.partnerId] || 0 };
-        cursor += 1;
+        // дети центрируются внутри зарезервированной ширины блока (она
+        // не меньше 2, даже если детей мало/нет), а self и партнёр —
+        // вплотную друг к другу, ровно по центру над детьми
+        const kidsOffset = blockStart + (block.width - block.kidsWidth) / 2;
+        let kc = kidsOffset;
+        for (const cu of block.childUnits){ assignPositions(cu, kc); kc += cu.width; }
+        const pairCenter = blockStart + block.width / 2;
+        fixedX.set(block.anchorId, pairCenter - 0.5);
+        positions[block.partnerId] = { x: pairCenter + 0.5, depth: rowOf[block.partnerId] || 0 };
+        cursor = blockStart + block.width;
+      } else {
+        for (const cu of block.childUnits){ assignPositions(cu, cursor); cursor += cu.width; }
+        if (!block.childUnits.length) cursor += block.width;
+        extendSpan(block.anchorId, blockStart, cursor);
       }
-      for (const cu of block.childUnits){
-        assignPositions(cu, cursor);
-        cursor += cu.width;
-      }
-      const blockEnd = cursor;
-      extendSpan(block.anchorId, blockStart, blockEnd);
+    }
+    for (const [id, x] of fixedX){
+      positions[id] = { x, depth: rowOf[id] || 0 };
     }
     for (const [id, span] of spans){
+      if (fixedX.has(id)) continue; // пара уже дала точную позицию — она важнее плавающего центра
       positions[id] = { x: (span.start + span.end) / 2, depth: rowOf[id] || 0 };
     }
   }
