@@ -423,6 +423,67 @@ function deletePerson(id){
   }
   save();
 }
+function ancestorsSet(personId){
+  const out = new Set();
+  const start = P(personId);
+  const stack = [];
+  if (start){ if (start.fatherId) stack.push(start.fatherId); if (start.motherId) stack.push(start.motherId); }
+  while (stack.length){
+    const id = stack.pop();
+    if (out.has(id)) continue;
+    out.add(id);
+    const p = P(id);
+    if (p){ if (p.fatherId) stack.push(p.fatherId); if (p.motherId) stack.push(p.motherId); }
+  }
+  return out;
+}
+/* Создаёт человека-заглушку с понятным, различимым именем (не просто
+   "Родитель (уточнить)" — иначе в дереве накапливаются одинаковые с виду
+   карточки, и непонятно, чей это родитель). kind — "Родитель" или
+   "Прародитель" (для уровня на поколение выше), refText — короткая
+   подсказка, к кому он относится. */
+function makePlaceholder(kind, refText){
+  const ph = newPerson({ firstName: kind, lastName: refText ? "(" + refText + ")" : "(уточнить)" });
+  DB.persons[ph.id] = ph;
+  return ph;
+}
+/* Связать двух УЖЕ существующих людей как братьев/сестёр. Раньше это
+   приходилось делать вручную — открыть карточку каждого и по отдельности
+   выставить одного и того же родителя в выпадающем списке. Эта функция
+   делает это одним действием: если у одного из них родитель уже указан,
+   а у другого нет — просто копирует; если совпадающих родителей нет
+   вовсе — заводит одного общего родителя-заглушку сразу для обоих. */
+function linkAsSiblings(aId, bId){
+  const a = P(aId), b = P(bId);
+  if (!a || !b || aId === bId) return false;
+  if (descendantsSet(aId).has(bId) || descendantsSet(bId).has(aId)){
+    toast("Один из них — потомок другого, братьями/сёстрами быть не может");
+    return false;
+  }
+  function reconcileSlot(role){
+    if (a[role] && b[role]) return a[role] === b[role] ? "ok" : "conflict";
+    if (a[role] && !b[role]) { b[role] = a[role]; return "ok"; }
+    if (!a[role] && b[role]) { a[role] = b[role]; return "ok"; }
+    return "empty";
+  }
+  const fatherState = reconcileSlot("fatherId");
+  const motherState = reconcileSlot("motherId");
+  const alreadySiblings = (a.fatherId && a.fatherId === b.fatherId) || (a.motherId && a.motherId === b.motherId);
+  if (!alreadySiblings){
+    if (fatherState === "empty"){
+      const ph = makePlaceholder("Родитель", fullName(a) + " и " + fullName(b));
+      a.fatherId = ph.id; b.fatherId = ph.id;
+    } else if (motherState === "empty"){
+      const ph = makePlaceholder("Родитель", fullName(a) + " и " + fullName(b));
+      a.motherId = ph.id; b.motherId = ph.id;
+    } else {
+      toast("Не получилось: у обоих уже указаны разные родители — сначала поправьте вручную");
+      return false;
+    }
+  }
+  save();
+  return true;
+}
 
 /* группы "родитель(и) + дети" для конкретного человека как одного из родителей */
 function coParentGroups(personId){
@@ -817,13 +878,12 @@ function quickAddSibling(baseId){
   const base = P(baseId);
   let fatherId = base.fatherId, motherId = base.motherId;
   if (!fatherId && !motherId){
-    // создаём родителя-заглушку, чтобы связь была видна на дереве
-    const placeholder = newPerson({ firstName:"Родитель", lastName:"(уточнить)" });
-    DB.persons[placeholder.id] = placeholder;
+    // создаём родителя-заглушку с понятным именем, чтобы связь была видна на дереве
+    const placeholder = makePlaceholder("Родитель", fullName(base));
     fatherId = placeholder.id;
     base.fatherId = fatherId;
     save();
-    toast("Создан родитель-заглушка — заполните его данные позже");
+    toast("Создан общий родитель-заглушка «" + displayLabel(placeholder) + "» — заполните его данные позже");
   }
   openPersonForm({
     mode:"new",
@@ -832,6 +892,41 @@ function quickAddSibling(baseId){
     presetFatherId: fatherId, presetMotherId: motherId,
     afterSave: () => openDetail(baseId)
   });
+}
+
+/* Связать УЖЕ существующего человека как брата/сестру — без ручной
+   привязки к одному и тому же родителю в двух разных карточках. */
+function quickLinkExistingSibling(baseId){
+  const base = P(baseId);
+  const exclude = descendantsSetIncludingSelf(baseId);
+  for (const anc of ancestorsSet(baseId)) exclude.add(anc);
+  const siblingIds = new Set(allPersons().filter(x => x.id !== baseId && (
+    (base.fatherId && x.fatherId === base.fatherId) || (base.motherId && x.motherId === base.motherId)
+  )).map(x => x.id));
+  const candidates = allPersons().filter(p => !exclude.has(p.id) && !siblingIds.has(p.id));
+
+  const modal = document.getElementById("personModal");
+  modal.innerHTML =
+    '<button class="close-x" id="pfClose">×</button>' +
+    '<h2>Связать как брата/сестру</h2>' +
+    '<div class="sub">Выберите уже существующего человека — общий родитель подставится сам (а если ни у кого из них родитель ещё не указан, для него заведётся одна общая заглушка на двоих).</div>' +
+    (candidates.length
+      ? '<div class="form-row"><select id="sibSelect">' + candidates.slice().sort((a,b)=>fullName(a).localeCompare(fullName(b),"ru")).map(p => '<option value="'+p.id+'">'+escapeHtml(displayLabel(p))+'</option>').join("") + '</select></div>'
+      : '<div class="hint-box">Подходящих людей пока нет — сначала добавьте кого-то отдельной карточкой.</div>') +
+    '<div class="modal-actions"><button type="button" id="pfCancel">Отмена</button><button type="button" id="pfSave" class="primary"'+(candidates.length?'':' disabled')+'>Связать</button></div>';
+  showOverlay("modalOverlay");
+  document.getElementById("pfClose").onclick = () => hideOverlay("modalOverlay");
+  document.getElementById("pfCancel").onclick = () => hideOverlay("modalOverlay");
+  document.getElementById("pfSave").onclick = () => {
+    const sel = modal.querySelector("#sibSelect");
+    const otherId = sel ? sel.value : null;
+    hideOverlay("modalOverlay");
+    if (otherId && linkAsSiblings(baseId, otherId)){
+      refreshAll();
+      toast("Готово — теперь это братья/сёстры");
+    }
+    openDetail(baseId);
+  };
 }
 
 function quickAddUncleAunt(baseId){
@@ -844,12 +939,11 @@ function quickAddUncleAunt(baseId){
     const parent = P(parentId);
     let gfId = parent.fatherId, gmId = parent.motherId;
     if (!gfId && !gmId){
-      const placeholder = newPerson({ firstName:"Родитель", lastName:"(уточнить)" });
-      DB.persons[placeholder.id] = placeholder;
+      const placeholder = makePlaceholder("Прародитель", fullName(base));
       gfId = placeholder.id;
       parent.fatherId = gfId;
       save();
-      toast("Создан родитель-заглушка для " + fullName(parent) + " — заполните позже");
+      toast("Создан родитель-заглушка «" + displayLabel(placeholder) + "» для " + fullName(parent) + " — заполните позже");
     }
     openPersonForm({
       mode:"new",
@@ -861,13 +955,23 @@ function quickAddUncleAunt(baseId){
   }
 
   if (parentOptions.length === 0){
-    // ни один родитель не известен — создаём родителя-заглушку под base, затем ведём как обычно
-    const placeholder = newPerson({ firstName:"Родитель", lastName:"(уточнить)" });
-    DB.persons[placeholder.id] = placeholder;
-    base.fatherId = placeholder.id;
+    // ни один родитель не известен — заводим сразу обоих недостающих
+    // предков одним действием, с понятными различимыми именами, и без
+    // путающего повторного тоста (раньше здесь был каскад из двух
+    // отдельных заглушек с сообщением, ссылающимся самим на себя)
+    const parentPh = makePlaceholder("Родитель", fullName(base));
+    const grandparentPh = makePlaceholder("Прародитель", fullName(base));
+    parentPh.fatherId = grandparentPh.id;
+    base.fatherId = parentPh.id;
     save();
-    toast("Сначала создан родитель-заглушка — сейчас добавим его брата/сестру (дядю/тётю)");
-    proceed(placeholder.id);
+    toast("Созданы заглушки «" + displayLabel(parentPh) + "» и «" + displayLabel(grandparentPh) + "» — заполните их данные позже");
+    openPersonForm({
+      mode:"new",
+      title:"Дядя/тётя для " + fullName(base),
+      subtitle:"Будет братом/сестрой «" + displayLabel(parentPh) + "». Дерево сразу разветвится.",
+      presetFatherId: grandparentPh.id, presetMotherId: null,
+      afterSave: () => openDetail(baseId)
+    });
     return;
   }
   if (parentOptions.length === 1){
@@ -887,6 +991,73 @@ function quickAddUncleAunt(baseId){
   document.getElementById("pfClose").onclick = () => hideOverlay("modalOverlay");
   modal.querySelectorAll(".chip").forEach(btn=>{
     btn.addEventListener("click", ()=>{ hideOverlay("modalOverlay"); proceed(btn.dataset.pid); });
+  });
+}
+
+/* Связать УЖЕ существующего человека как дядю/тётю: выбираем сторону
+   (как в quickAddUncleAunt), а дальше вместо создания нового человека
+   выбираем существующего и делаем его братом/сестрой этого родителя —
+   через ту же linkAsSiblings, что и для родных братьев/сестёр. */
+function quickLinkExistingUncleAunt(baseId){
+  const base = P(baseId);
+  const parentOptions = [];
+  if (base.fatherId && P(base.fatherId)) parentOptions.push({ id: base.fatherId, label: "по линии отца — " + fullName(P(base.fatherId)) });
+  if (base.motherId && P(base.motherId)) parentOptions.push({ id: base.motherId, label: "по линии матери — " + fullName(P(base.motherId)) });
+
+  function pickPerson(parentId){
+    const parent = P(parentId);
+    const exclude = descendantsSetIncludingSelf(parentId);
+    for (const anc of ancestorsSet(parentId)) exclude.add(anc);
+    exclude.add(baseId);
+    const candidates = allPersons().filter(p => !exclude.has(p.id));
+    const modal = document.getElementById("personModal");
+    modal.innerHTML =
+      '<button class="close-x" id="pfClose">×</button>' +
+      '<h2>Дядя/тётя для ' + escapeHtml(fullName(base)) + '</h2>' +
+      '<div class="sub">Выберите уже существующего человека — станет братом/сестрой ' + escapeHtml(fullName(parent)) + '.</div>' +
+      (candidates.length
+        ? '<div class="form-row"><select id="unSelect">' + candidates.slice().sort((a,b)=>fullName(a).localeCompare(fullName(b),"ru")).map(p => '<option value="'+p.id+'">'+escapeHtml(displayLabel(p))+'</option>').join("") + '</select></div>'
+        : '<div class="hint-box">Подходящих людей пока нет.</div>') +
+      '<div class="modal-actions"><button type="button" id="pfCancel">Отмена</button><button type="button" id="pfSave" class="primary"'+(candidates.length?'':' disabled')+'>Связать</button></div>';
+    showOverlay("modalOverlay");
+    document.getElementById("pfClose").onclick = () => hideOverlay("modalOverlay");
+    document.getElementById("pfCancel").onclick = () => hideOverlay("modalOverlay");
+    document.getElementById("pfSave").onclick = () => {
+      const sel = modal.querySelector("#unSelect");
+      const otherId = sel ? sel.value : null;
+      hideOverlay("modalOverlay");
+      if (otherId && linkAsSiblings(parentId, otherId)){
+        refreshAll();
+        toast("Готово — теперь это дядя/тётя для " + fullName(base));
+      }
+      openDetail(baseId);
+    };
+  }
+
+  if (parentOptions.length === 0){
+    const placeholder = makePlaceholder("Родитель", fullName(base));
+    base.fatherId = placeholder.id;
+    save();
+    toast("Создан родитель-заглушка «" + displayLabel(placeholder) + "» — заполните его данные позже");
+    pickPerson(placeholder.id);
+    return;
+  }
+  if (parentOptions.length === 1){
+    pickPerson(parentOptions[0].id);
+    return;
+  }
+  const modal = document.getElementById("personModal");
+  modal.innerHTML =
+    '<button class="close-x" id="pfClose">×</button>' +
+    '<h2>Дядя/тётя для ' + escapeHtml(fullName(base)) + '</h2>' +
+    '<div class="sub">С какой стороны?</div>' +
+    '<div class="chip-grid">' +
+      parentOptions.map(o => '<button class="chip" data-pid="' + o.id + '">' + escapeHtml(o.label) + '</button>').join("") +
+    '</div>';
+  showOverlay("modalOverlay");
+  document.getElementById("pfClose").onclick = () => hideOverlay("modalOverlay");
+  modal.querySelectorAll(".chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ hideOverlay("modalOverlay"); pickPerson(btn.dataset.pid); });
   });
 }
 
@@ -1008,7 +1179,7 @@ function openDetail(id){
   } else {
     html += '<div class="hint-box">Пока никого не добавлено.</div>';
   }
-  html += '<div class="chip-grid" style="margin-top:8px;"><button class="chip" data-act="addSibling">+ Брат/сестра</button></div>';
+  html += '<div class="chip-grid" style="margin-top:8px;"><button class="chip" data-act="addSibling">+ Брат/сестра (новый)</button><button class="chip" data-act="linkSibling">+ Брат/сестра (существующий)</button></div>';
 
   html += '<div class="section-title">Дяди и тёти</div>';
   const auncles = [father, mother].filter(Boolean).flatMap(par =>
@@ -1020,7 +1191,7 @@ function openDetail(id){
   } else {
     html += '<div class="hint-box">Пока никого не добавлено.</div>';
   }
-  html += '<div class="chip-grid" style="margin-top:8px;"><button class="chip" data-act="addUncle">+ Дядя/тётя</button></div>';
+  html += '<div class="chip-grid" style="margin-top:8px;"><button class="chip" data-act="addUncle">+ Дядя/тётя (новый)</button><button class="chip" data-act="linkUncle">+ Дядя/тётя (существующий)</button></div>';
 
   html += '<div class="section-title">Супруг(и)</div>';
   if (spouses.length){
@@ -1086,7 +1257,9 @@ function openDetail(id){
   act('[data-act="linkFather"]', () => { hideOverlay("detailOverlay"); quickLinkExistingRelative(id, "father"); });
   act('[data-act="linkMother"]', () => { hideOverlay("detailOverlay"); quickLinkExistingRelative(id, "mother"); });
   act('[data-act="addSibling"]', () => { hideOverlay("detailOverlay"); quickAddSibling(id); });
+  act('[data-act="linkSibling"]', () => { hideOverlay("detailOverlay"); quickLinkExistingSibling(id); });
   act('[data-act="addUncle"]', () => { hideOverlay("detailOverlay"); quickAddUncleAunt(id); });
+  act('[data-act="linkUncle"]', () => { hideOverlay("detailOverlay"); quickLinkExistingUncleAunt(id); });
   act('[data-act="addSpouseNew"]', () => { hideOverlay("detailOverlay"); quickAddSpouseNew(id); });
   act('[data-act="linkSpouse"]', () => { hideOverlay("detailOverlay"); quickLinkExistingSpouse(id); });
   act('[data-act="addChild"]', () => { hideOverlay("detailOverlay"); quickAddChild(id); });
