@@ -578,7 +578,8 @@ function computeLayout(){
   const visited = new Set();
   const processedCouples = new Set();
   const marriageEdges = []; // {a,b} — супруги стоят рядом, обычная короткая линия
-  const childEdgesOut = []; // {parentAId, parentBId(or null), childIds}
+  const childEdgesOut = []; // {parentAId, parentBId(or null), childIds, block}
+  const elsewhereLinks = []; // {block, anchorId, partnerId} — кандидаты на "прививку" целого дерева супруга рядом
 
   function coupleKey(a,b){ return [a,b].sort().join("~"); }
   function sortChildren(ids){
@@ -640,9 +641,12 @@ function computeLayout(){
         // родители, не занимаем его место здесь: пусть его правильно
         // разместит его СОБСТВЕННАЯ родительская ветка — связь "ребёнок →
         // его настоящие родители" важнее соседства супругов, это пропадать
-        // не должно. Такого супруга никакой линией через всё дерево не
-        // соединяем (это и выглядело криво, и захламляло дерево) — его имя
-        // и так видно текстом на карточке ("⚭ …").
+        // не должно. Такого супруга не бросаем далеко на другом конце
+        // холста: ниже, когда всё дерево-лес уже построено, целиком
+        // "прививаем" его собственное поддерево вплотную рядом с этим
+        // местом (см. elsewhereLinks) — тогда и супруги встают рядом, и
+        // дети оказываются точно между ними, и родословная супруга никуда
+        // не девается, просто едет вместе с ним.
         const partnerHasOwnAncestry = !!(P(g.partnerId).fatherId || P(g.partnerId).motherId);
         if (!visited.has(g.partnerId) && !partnerHasOwnAncestry){
           visited.add(g.partnerId);
@@ -661,13 +665,14 @@ function computeLayout(){
       }
       const block = { anchorId, partnerId: g.partnerId || null, partnerFresh, partnerElsewhere, childUnits };
       blocksArr.push(block);
+      if (partnerElsewhere){
+        elsewhereLinks.push({ block, anchorId, partnerId: g.partnerId });
+      }
       if (g.childIds.length){
-        // parentBAdjacent=true — партнёр реально стоит рядом (используем его
-        // настоящую позицию для стволовой линии). hasCoupleSlot=true —
-        // партнёр размещён отдельно, но рядом с этим родителем зарезервирован
-        // его пустой слот (coupleSlots) — стволовая линия центрируется по
-        // НЕМУ, а не тянется к далёкой настоящей позиции второго родителя.
-        childEdgesOut.push({ parentAId: anchorId, parentBId: g.partnerId || null, childIds: childUnits.map(cu => cu.id), parentBAdjacent: partnerFresh, hasCoupleSlot: partnerElsewhere });
+        // block хранится по ссылке — итоговые флаги (получилась ли
+        // "прививка" целого дерева супруга рядом, см. ниже) читаются из
+        // него в самом конце, когда уже точно известно
+        childEdgesOut.push({ parentAId: anchorId, parentBId: g.partnerId || null, childIds: childUnits.map(cu => cu.id), block });
       }
       if (partnerFresh){
         extendChain(g.partnerId, blocksArr); // продолжаем цепочку (повторный брак) в той же строке
@@ -704,19 +709,56 @@ function computeLayout(){
   // подстраховка: кто-то не попал (битые ссылки на несуществующих родителей)
   for (const p of allPersons()){ if (!visited.has(p.id)){ const u = buildUnit(p.id); if (u) forest.push(u); } }
 
+  // ---- Прививка: супруг(а), у которого(ой) есть свои известные родители,
+  // получает позицию через СВОЁ родословное поддерево — оно строится
+  // отдельным корнем "леса" (см. выше). Чтобы супруги всё равно стояли
+  // РЯДОМ, а их дети — ТОЧНО между ними, а не под одним из родителей,
+  // здесь мы находим то самостоятельное поддерево целиком (по любому из
+  // входящих в него id) и физически "пересаживаем" его вплотную к месту
+  // партнёра — вместе со всей его собственной родословной, которая при
+  // этом остаётся связанной и корректной, просто едет как единое целое.
+  const idToRootUnit = new Map();
+  (function indexForest(){
+    function walk(unit, root){
+      idToRootUnit.set(unit.id, root);
+      for (const block of unit.blocks){
+        if (block.partnerId) idToRootUnit.set(block.partnerId, root);
+        for (const cu of block.childUnits) walk(cu, root);
+      }
+    }
+    for (const u of forest) walk(u, u);
+  })();
+  const graftedUnits = new Set();
+  for (const link of elsewhereLinks){
+    const { block, anchorId, partnerId } = link;
+    const partnerRoot = idToRootUnit.get(partnerId);
+    const anchorRoot = idToRootUnit.get(anchorId);
+    // нельзя прививать дерево само к себе (супруги внутри одного и того
+    // же рода — например, женился на дальней родственнице) и нельзя
+    // прививать уже привитое кем-то другим поддерево дважды
+    if (!partnerRoot || partnerRoot === anchorRoot || graftedUnits.has(partnerRoot)) continue;
+    const idx = forest.indexOf(partnerRoot);
+    if (idx === -1) continue;
+    forest.splice(idx, 1);
+    graftedUnits.add(partnerRoot);
+    block.graftedUnit = partnerRoot;
+  }
+
   // ---- Проход 2: снизу вверх считаем ширину (в "слотах") каждого юнита ----
-  // Блоку с партнёром — рядом ли он встал, или размещён отдельно у своих
-  // родителей — всегда резервируем МИНИМУМ 2 слота (self + партнёр),
-  // даже если детей нет вовсе или он всего один: иначе self и партнёр
-  // могли посчитаться на одном и том же месте, а дети — оказаться не
-  // между родителями, а строго под одним из них.
+  // self занимает 1 слот; если рядом реально встаёт партнёр (свежий или
+  // привитое дерево) — плюс его ширина; если это лишь резерв "пустого"
+  // места (партнёра пристроить рядом не удалось — редкий сложный случай)
+  // — плюс 1. Так дети всегда центрируются МЕЖДУ self и этим соседом.
   function computeWidth(unit){
     let blocksWidth = 0;
     for (const block of unit.blocks){
       let kidsW = 0;
       for (const cu of block.childUnits) kidsW += computeWidth(cu);
       block.kidsWidth = kidsW;
-      block.width = (block.partnerFresh || block.partnerElsewhere) ? Math.max(kidsW, 2) : kidsW;
+      if (block.graftedUnit) computeWidth(block.graftedUnit);
+      const rightW = block.partnerFresh ? 1 : block.graftedUnit ? block.graftedUnit.width : block.partnerElsewhere ? 1 : 0;
+      const hasPair = block.partnerFresh || block.graftedUnit || block.partnerElsewhere;
+      block.width = hasPair ? Math.max(kidsW, 1 + rightW) : kidsW;
       blocksWidth += block.width;
     }
     unit.width = Math.max(blocksWidth, 1);
@@ -728,7 +770,7 @@ function computeLayout(){
   //      родителя (и каждого "пристёгнутого" по цепочке партнёра) над
   //      суммарной шириной того, что от него зависит ----
   const positions = {};
-  const coupleSlots = []; // {anchorId, partnerId, x, depth} — второй (пустой) слот пары, когда партнёр размещён отдельно; нужен только для центрирования детей и стрелки, сам не рисуется
+  const coupleSlots = []; // {anchorId, partnerId, x, depth} — редкий случай, когда партнёра пристроить рядом не удалось: пустой слот только для центрирования детей, сам не рисуется
   function assignPositions(unit, offset){
     if (!unit.blocks.length){
       positions[unit.id] = { x: offset + 0.5, depth: rowOf[unit.id] || 0 };
@@ -744,20 +786,31 @@ function computeLayout(){
     }
     for (const block of unit.blocks){
       const blockStart = cursor;
-      if (block.partnerFresh || block.partnerElsewhere){
-        // дети центрируются внутри зарезервированной ширины блока (она
-        // не меньше 2, даже если детей мало/нет) — т.е. МЕЖДУ self и
-        // партнёром (реальным соседом или его пустым вторым слотом), а
-        // не строго под одним из родителей
+      if (block.partnerFresh || block.graftedUnit || block.partnerElsewhere){
+        // дети центрируются внутри зарезервированной ширины блока — т.е.
+        // МЕЖДУ self и партнёром (реальным соседом или привитым деревом),
+        // а не строго под одним из родителей
         const kidsOffset = blockStart + (block.width - block.kidsWidth) / 2;
         let kc = kidsOffset;
         for (const cu of block.childUnits){ assignPositions(cu, kc); kc += cu.width; }
-        const pairCenter = blockStart + block.width / 2;
-        fixedX.set(block.anchorId, pairCenter - 0.5);
+        const rightW = block.partnerFresh ? 1 : block.graftedUnit ? block.graftedUnit.width : 1;
+        const pairWidth = 1 + rightW;
+        const pairStart = blockStart + (block.width - pairWidth) / 2;
+        fixedX.set(block.anchorId, pairStart + 0.5);
         if (block.partnerFresh){
-          positions[block.partnerId] = { x: pairCenter + 0.5, depth: rowOf[block.partnerId] || 0 };
+          positions[block.partnerId] = { x: pairStart + 1 + 0.5, depth: rowOf[block.partnerId] || 0 };
+        } else if (block.graftedUnit){
+          // сначала "пробный" прогон с нуля, чтобы узнать, где партнёр
+          // окажется внутри своего привитого поддерева (он может быть не
+          // в его корне, а на несколько поколений ниже) — затем сдвигаем
+          // ВСЁ поддерево целиком на нужную разницу, чтобы партнёр встал
+          // ровно рядом с self, а вся его родословная поехала вместе с ним
+          assignPositions(block.graftedUnit, 0);
+          const desired = pairStart + 1 + 0.5;
+          const delta = desired - positions[block.partnerId].x;
+          assignPositions(block.graftedUnit, delta);
         } else {
-          coupleSlots.push({ anchorId: block.anchorId, partnerId: block.partnerId, x: pairCenter + 0.5, depth: rowOf[block.anchorId] || 0 });
+          coupleSlots.push({ anchorId: block.anchorId, partnerId: block.partnerId, x: pairStart + 1 + 0.5, depth: rowOf[block.anchorId] || 0 });
         }
         cursor = blockStart + block.width;
       } else {
@@ -780,6 +833,14 @@ function computeLayout(){
   let cursorTop = 0;
   for (const u of forest){ assignPositions(u, cursorTop); cursorTop += u.width + FOREST_GAP; }
   if (forest.length) cursorTop -= FOREST_GAP;
+
+  // теперь, когда точно известно, удалась ли "прививка", проставляем
+  // финальные флаги для рендера стволовых линий и убираем служебную ссылку
+  for (const e of childEdgesOut){
+    e.parentBAdjacent = !!(e.block.partnerFresh || e.block.graftedUnit);
+    e.hasCoupleSlot = !!e.block.partnerElsewhere && !e.block.graftedUnit;
+    delete e.block;
+  }
 
   const maxDepth = Math.max(0, ...Object.values(rowOf));
   return { positions, marriageEdges, coupleSlots, childEdges: childEdgesOut, width: cursorTop, maxDepth };
