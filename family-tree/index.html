@@ -853,7 +853,10 @@ function computeLayout(){
     const delta = (anchorPos.x + 1) - partnerPos.x;
     const memberIds = collectUnitIds(partnerRoot);
     if (wouldCollide(memberIds, delta)){
-      fallbackConnectors.push({ a: anchorId, b: partnerId });
+      // ветка начинается не от самой карточки anchor, а от той же точки
+      // (pairCenter), где уже центрируются общие дети — так видно, что
+      // дети действительно между родителями, а не просто "висят" у одного
+      fallbackConnectors.push({ a: anchorId, b: partnerId, pairX: anchorPos.x + 0.5, depth: anchorPos.depth });
       continue;
     }
     for (const id of memberIds){
@@ -1013,7 +1016,7 @@ function renderTree(){
   for (const e of layout.fallbackConnectors){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     if (!a || !b) continue;
-    const ax = px(a.x), bx = px(b.x);
+    const ax = px(e.pairX != null ? e.pairX : a.x), bx = px(b.x);
     if (a.depth === b.depth){
       const bottomY = py(a.depth) + NODE_H;
       const dipY = bottomY + 22;
@@ -1789,7 +1792,7 @@ function buildExportSvg(layout, w, h, colors){
   for (const e of (layout.fallbackConnectors || [])){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     if (!a || !b) continue;
-    const ax = px(a.x), bx = px(b.x);
+    const ax = px(e.pairX != null ? e.pairX : a.x), bx = px(b.x);
     if (a.depth === b.depth){
       const bottomY = py(a.depth) + NODE_H;
       const dipY = bottomY + 22;
