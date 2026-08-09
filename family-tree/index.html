@@ -840,6 +840,7 @@ function computeLayout(){
     return false;
   }
   const graftedUnits = new Set();
+  const fallbackConnectors = []; // {a,b,pairX} — прививка невозможна без наложения: супругов всё равно соединяем прямой веткой того же стиля, что и всё остальное дерево
   for (const link of elsewhereLinks){
     const { block, anchorId, partnerId } = link;
     const partnerRoot = idToRootUnit.get(partnerId);
@@ -851,10 +852,12 @@ function computeLayout(){
     if (!anchorPos || !partnerPos) continue;
     const delta = (anchorPos.x + 1) - partnerPos.x;
     const memberIds = collectUnitIds(partnerRoot);
-    // если прививка наложится на другую ветку — просто оставляем как
-    // есть (пустой резервный слот уже корректно центрирует общих детей,
-    // без наложений); никакой линии дорисовывать не пытаемся
-    if (wouldCollide(memberIds, delta)) continue;
+    // если прививка наложится на другую ветку — оставляем обоих на их
+    // корректных (без наложений) местах и просто соединяем прямой веткой
+    if (wouldCollide(memberIds, delta)){
+      fallbackConnectors.push({ a: anchorId, b: partnerId, pairX: anchorPos.x + 0.5 });
+      continue;
+    }
     for (const id of memberIds){
       const pos = positions[id];
       if (!pos) continue;
@@ -887,7 +890,7 @@ function computeLayout(){
   const width = Math.max(cursorTop, ...Object.values(positions).map(p => p.x + 0.5));
 
   const maxDepth = Math.max(0, ...Object.values(rowOf));
-  return { positions, marriageEdges, coupleSlots, childEdges: childEdgesOut, width, maxDepth };
+  return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges: childEdgesOut, width, maxDepth };
 }
 
 function svgEl(tag, attrs){
@@ -1004,13 +1007,27 @@ function renderTree(){
     fo.appendChild(div);
     nodesLayer.appendChild(fo);
   }
-  // супруг(а), которого(ую) не удалось поставить рядом (иначе родословная
-  // наложилась бы на другую ветку) — намеренно НЕ соединяем никакой линией:
-  // каждая добавленная сюда линия (стрелка, дуга, петля-нырок под ряд)
-  // на практике оказывалась лишней и путала — дерево целиком остаётся
-  // единым стилем из одних только прямых стволовых и коротких брачных
-  // линий. Имя супруга видно текстом на карточке ("⚭ …") — этого хватает,
-  // как и в обычных генеалогических деревьях.
+  // супруги, которых не удалось поставить рядом (иначе родословная
+  // наложилась бы на другую ветку) — всё равно соединяем прямой веткой:
+  // ТОТ ЖЕ цвет и толщина, что и у всех остальных линий (ни стрелок, ни
+  // пунктира, ни отдельного акцентного цвета — единый стиль по всему
+  // дереву). Супруги всегда стоят в одной строке (см. computeRows), так
+  // что это просто нырок под ряд и обратно, без диагоналей.
+  for (const e of layout.fallbackConnectors){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    if (!a || !b) continue;
+    // начало ветки — та же точка (pairX), где уже центрируются общие
+    // дети, но сдвинутая чуть в сторону и нырнувшая ГЛУБЖЕ, чем стволовая
+    // перекладина к детям — иначе обе линии сливаются в точке касания и
+    // на глаз читаются как одна кривая петля, а не как две разные линии
+    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
+    const bottomY = py(a.depth) + NODE_H;
+    const dipY = bottomY + 34;
+    linesLayer.appendChild(svgEl("path", {
+      d: `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`,
+      fill: "none", stroke: "var(--line)", "stroke-width": 2
+    }));
+  }
 }
 
 function escapeHtml(s){
@@ -1769,8 +1786,20 @@ function buildExportSvg(layout, w, h, colors){
     }
   }
 
-  // супруг(а), которого(ую) не удалось поставить рядом — намеренно НЕ
-  // соединяем никакой линией (см. комментарий в renderTree)
+  // супруги, которых не удалось поставить рядом — соединяем прямой веткой
+  // (та же логика и тот же стиль, что и в дереве на экране)
+  for (const e of (layout.fallbackConnectors || [])){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    if (!a || !b) continue;
+    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
+    const bottomY = py(a.depth) + NODE_H;
+    const dipY = bottomY + 34;
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`);
+    p.setAttribute("fill", "none");
+    p.setAttribute("stroke", colors.line); p.setAttribute("stroke-width", 2);
+    linesG.appendChild(p);
+  }
   return svg;
 }
 
