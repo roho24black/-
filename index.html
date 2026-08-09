@@ -249,6 +249,7 @@ main{flex:1; display:flex; flex-direction:column; min-height:0;}
       <button class="iconbtn" id="btnExport" title="Скачать резервную копию">⬇ Экспорт</button>
       <button class="iconbtn" id="btnImportBtn" title="Загрузить из файла">⬆ Импорт</button>
       <input type="file" id="importFile" accept="application/json" hidden>
+      <button class="iconbtn" id="btnPhoto" title="Сохранить дерево как картинку и отправить">📷 Как фото</button>
       <button class="iconbtn" id="btnPrint" title="Печать / PDF">🖨</button>
     </div>
   </header>
@@ -1203,6 +1204,188 @@ document.getElementById("importFile").addEventListener("change", (e) => {
   e.target.value = "";
 });
 document.getElementById("btnPrint").addEventListener("click", () => window.print());
+document.getElementById("btnPhoto").addEventListener("click", exportTreeAsImage);
+
+/* ---------------------------------------------------------------- */
+/* Сохранить/отправить дерево как картинку (PNG)                    */
+/* ---------------------------------------------------------------- */
+/* Растровый экспорт строим НЕ из живого дерева (там карточки — это HTML
+   внутри <foreignObject>), а отдельной, чисто SVG-шной версией (rect+text).
+   Это принципиально: canvas.toBlob() бросает SecurityError ("tainted
+   canvas") для любого SVG с <foreignObject> внутри, даже если всё
+   содержимое локальное и одного происхождения — так браузеры трактуют
+   HTML-в-SVG как потенциально небезопасный контент. Чистый SVG без
+   foreignObject этой проблемы не имеет и рисуется в canvas без ограничений. */
+function truncateForBox(s, maxChars){
+  if (!s) return "";
+  s = String(s);
+  return s.length > maxChars ? s.slice(0, maxChars - 1) + "…" : s;
+}
+function svgText(x, y, str, attrs){
+  const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  t.setAttribute("x", x); t.setAttribute("y", y);
+  t.setAttribute("text-anchor", "middle");
+  for (const k in attrs) t.setAttribute(k, attrs[k]);
+  t.textContent = str;
+  return t;
+}
+function buildExportSvg(layout, w, h, colors){
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  svg.setAttribute("width", w); svg.setAttribute("height", h);
+  svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("x", 0); bg.setAttribute("y", 0);
+  bg.setAttribute("width", w); bg.setAttribute("height", h);
+  bg.setAttribute("fill", colors.bg);
+  svg.appendChild(bg);
+
+  function px(slotX){ return PAD + slotX * SLOT_W; }
+  function py(depth){ return PAD + depth * ROW_H; }
+
+  const linesG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  const nodesG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(linesG); svg.appendChild(nodesG);
+
+  const line = (x1,y1,x2,y2) => {
+    const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    l.setAttribute("x1", x1); l.setAttribute("y1", y1); l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+    l.setAttribute("stroke", colors.line); l.setAttribute("stroke-width", 2);
+    linesG.appendChild(l);
+  };
+  for (const e of layout.marriageEdges){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    if (!a || !b) continue;
+    const y = py(a.depth) + NODE_H/2;
+    line(px(a.x), y, px(b.x), y);
+  }
+  for (const e of layout.childEdges){
+    const posA = layout.positions[e.parentAId];
+    const posB = e.parentBId ? layout.positions[e.parentBId] : null;
+    if (!posA) continue;
+    const midX = posB ? (px(posA.x) + px(posB.x)) / 2 : px(posA.x);
+    const parentBottomY = py(posA.depth) + NODE_H;
+    const trunkY = parentBottomY + 22;
+    const kidPositions = e.childIds.map(cid => layout.positions[cid]).filter(Boolean);
+    if (!kidPositions.length) continue;
+    const kidXs = kidPositions.map(pos => px(pos.x));
+    line(midX, parentBottomY, midX, trunkY);
+    const barMinX = Math.min(midX, ...kidXs), barMaxX = Math.max(midX, ...kidXs);
+    line(barMinX, trunkY, barMaxX, trunkY);
+    for (const pos of kidPositions){ line(px(pos.x), trunkY, px(pos.x), py(pos.depth)); }
+  }
+
+  for (const p of allPersons()){
+    const pos = layout.positions[p.id];
+    if (!pos) continue;
+    const x = px(pos.x) - NODE_W/2, y = py(pos.depth);
+    const stroke = p.gender === "M" ? colors.male : p.gender === "F" ? colors.female : colors.unknown;
+    const fill = p.gender === "M" ? colors.maleBg : p.gender === "F" ? colors.femaleBg : colors.unknownBg;
+
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", x); rect.setAttribute("y", y);
+    rect.setAttribute("width", NODE_W); rect.setAttribute("height", NODE_H);
+    rect.setAttribute("rx", 10);
+    rect.setAttribute("fill", fill); rect.setAttribute("stroke", stroke); rect.setAttribute("stroke-width", 2);
+    if (p.deathDate) rect.setAttribute("opacity", "0.72");
+    nodesG.appendChild(rect);
+
+    const lines = [];
+    lines.push({ t: truncateForBox(fullName(p) + (p.deathDate ? " †" : ""), 24), size: 12.5, weight: "700", color: colors.ink });
+    if (p.maidenName) lines.push({ t: truncateForBox("урожд. " + p.maidenName, 22), size: 10.5, style: "italic", color: colors.muted });
+    if (lifeSpan(p)) lines.push({ t: lifeSpan(p), size: 10.5, color: colors.muted });
+    if (p.birthPlace) lines.push({ t: truncateForBox("📍 " + p.birthPlace, 22), size: 10, color: colors.muted });
+    const spouseNames = (p.spouseIds||[]).map(sid => P(sid)).filter(Boolean).map(s => fullName(s));
+    if (spouseNames.length) lines.push({ t: truncateForBox("⚭ " + spouseNames.join(", "), 22), size: 10, color: colors.accent2 });
+
+    const lineH = 13.5;
+    const totalH = lines.length * lineH;
+    let ty = y + NODE_H/2 - totalH/2 + lineH*0.75;
+    const cx = x + NODE_W/2;
+    for (const ln of lines){
+      const attrs = { "font-size": ln.size, fill: ln.color, "font-family": "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" };
+      if (ln.weight) attrs["font-weight"] = ln.weight;
+      if (ln.style) attrs["font-style"] = ln.style;
+      nodesG.appendChild(svgText(cx, ty, ln.t, attrs));
+      ty += lineH;
+    }
+  }
+  return svg;
+}
+
+async function exportTreeAsImage(){
+  if (!allPersons().length){ toast("Дерево пустое — нечего сохранять"); return; }
+
+  const layout = computeLayout();
+  const w = Math.max(layout.width, 1) * SLOT_W + PAD*2;
+  const h = (layout.maxDepth + 1) * ROW_H + PAD*2;
+
+  toast("Готовим изображение…");
+
+  const cs = getComputedStyle(document.documentElement);
+  const cssVar = (name, fallback) => (cs.getPropertyValue(name) || "").trim() || fallback;
+  const colors = {
+    bg: cssVar("--bg", "#f5f1e8"),
+    ink: cssVar("--ink", "#2b2620"),
+    muted: cssVar("--muted", "#7c7364"),
+    accent2: cssVar("--accent-2", "#b6844f"),
+    male: cssVar("--male", "#4a6fa5"), maleBg: cssVar("--male-bg", "#e8eff8"),
+    female: cssVar("--female", "#a5486f"), femaleBg: cssVar("--female-bg", "#f8e8ef"),
+    unknown: cssVar("--unknown", "#8a8272"), unknownBg: cssVar("--unknown-bg", "#eeeae1"),
+    line: cssVar("--line", "#b8ac93")
+  };
+
+  const exportSvg = buildExportSvg(layout, w, h, colors);
+  const svgString = new XMLSerializer().serializeToString(exportSvg);
+  const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error("image load failed"));
+      im.src = svgUrl;
+    });
+
+    const scale = 2; // резкость на экранах с высокой плотностью пикселей
+    const canvas = document.createElement("canvas");
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(svgUrl);
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    if (!blob){ toast("Не удалось создать изображение"); return; }
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const filename = "semeynoe-drevo-" + stamp + ".png";
+    const file = new File([blob], filename, { type: "image/png" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })){
+      try{
+        await navigator.share({ files: [file], title: "Семейное древо" });
+        return;
+      }catch(shareErr){
+        if (shareErr && shareErr.name === "AbortError") return; // пользователь отменил
+        // иначе — падаем в обычное скачивание ниже
+      }
+    }
+    const dlUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = dlUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(dlUrl), 4000);
+    toast("Картинка сохранена — можно отправить как файл");
+  } catch (err){
+    URL.revokeObjectURL(svgUrl);
+    console.warn("image export failed", err);
+    toast("Не удалось сохранить изображение");
+  }
+}
 
 /* закрытие модалок по клику на подложку */
 document.getElementById("modalOverlay").addEventListener("click", (e)=>{ if (e.target.id === "modalOverlay") hideOverlay("modalOverlay"); });
