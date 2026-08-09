@@ -610,6 +610,19 @@ function computeLayout(){
   function extendChain(anchorId, blocksArr){
     const groups = sortGroups(coParentGroups(anchorId));
     for (const g of groups){
+      // Если у ЭТОГО anchor нет своих известных родителей, а у партнёра
+      // они ЕСТЬ — не забираем общих детей себе: пусть их заберёт ветка
+      // партнёра, когда до неё дойдёт очередь (там coupleKey ещё не
+      // помечен, group будет обработана заново). Иначе, например, детей
+      // "пары, где муж без родословной" утаскивало под мужа, а жена (со
+      // своими настоящими родителями) оставалась отдельно от них —
+      // и любой её родной брат/сестра визуально оказывался МЕЖДУ мамой
+      // и папой.
+      if (g.partnerId && P(g.partnerId) && !visited.has(g.partnerId)){
+        const anchorHasAncestry = !!(P(anchorId).fatherId || P(anchorId).motherId);
+        const partnerHasAncestry = !!(P(g.partnerId).fatherId || P(g.partnerId).motherId);
+        if (!anchorHasAncestry && partnerHasAncestry) continue;
+      }
       const key = g.partnerId ? coupleKey(anchorId, g.partnerId) : null;
       if (key){
         if (processedCouples.has(key)) continue;
@@ -643,19 +656,46 @@ function computeLayout(){
     }
   }
 
+  // Человек без известных родителей, но с супругом/соучастником по детям,
+  // у которого родословная ЕСТЬ — не должен сканироваться как отдельный
+  // "корень" по порядку создания: иначе он захватывает себе позицию с
+  // краю дерева, а к настоящей семье (жены/мужа) его лишь дотягивает
+  // длинная линия брака — и любой родственник, оказавшийся между ними
+  // по счастливой случайности сортировки, визуально выглядит так, будто
+  // "разделяет" супругов. Пусть таких людей подбирает partnerFresh —
+  // ветка супруга с настоящей родословной — и ставит рядом с ним.
+  function hasAncestryfulPartner(id){
+    const p = P(id);
+    if (!p) return false;
+    const partnerIds = new Set(p.spouseIds || []);
+    for (const c of allPersons()){
+      if (c.fatherId === id && c.motherId) partnerIds.add(c.motherId);
+      if (c.motherId === id && c.fatherId) partnerIds.add(c.fatherId);
+    }
+    for (const pid of partnerIds){
+      const partner = P(pid);
+      if (partner && (partner.fatherId || partner.motherId)) return true;
+    }
+    return false;
+  }
+
   const forest = [];
-  const roots = allPersons().filter(p => !p.fatherId && !p.motherId);
+  const roots = allPersons().filter(p => !p.fatherId && !p.motherId && !hasAncestryfulPartner(p.id));
   for (const r of roots){ const u = buildUnit(r.id); if (u) forest.push(u); }
   // подстраховка: кто-то не попал (битые ссылки на несуществующих родителей)
   for (const p of allPersons()){ if (!visited.has(p.id)){ const u = buildUnit(p.id); if (u) forest.push(u); } }
 
   // ---- Проход 2: снизу вверх считаем ширину (в "слотах") каждого юнита ----
+  // Свежему партнёру всегда резервируем СВОЙ отдельный слот (не тот же,
+  // что и у детей!) — иначе при отсутствии детей или при их малом числе
+  // партнёр и центр родителя совпадали и карточки накладывались друг на
+  // друга ровно в одной точке.
   function computeWidth(unit){
     let blocksWidth = 0;
     for (const block of unit.blocks){
       let kidsW = 0;
       for (const cu of block.childUnits) kidsW += computeWidth(cu);
-      block.width = Math.max(kidsW, block.partnerFresh ? 1 : 0);
+      block.width = (block.partnerFresh ? 1 : 0) + kidsW;
       blocksWidth += block.width;
     }
     unit.width = Math.max(blocksWidth, 1);
@@ -673,7 +713,7 @@ function computeLayout(){
       return;
     }
     let cursor = offset;
-    const spans = new Map(); // anchorId/partnerId -> {start,end}
+    const spans = new Map(); // anchorId -> {start,end}, для центрирования self над всеми его блоками
     function extendSpan(id, start, end){
       const s = spans.get(id);
       if (s){ s.start = Math.min(s.start, start); s.end = Math.max(s.end, end); }
@@ -681,14 +721,17 @@ function computeLayout(){
     }
     for (const block of unit.blocks){
       const blockStart = cursor;
+      if (block.partnerFresh){
+        // отдельный слот под партнёра, до детей
+        positions[block.partnerId] = { x: cursor + 0.5, depth: rowOf[block.partnerId] || 0 };
+        cursor += 1;
+      }
       for (const cu of block.childUnits){
         assignPositions(cu, cursor);
         cursor += cu.width;
       }
-      if (!block.childUnits.length) cursor += block.width;
-      const blockEnd = Math.max(cursor, blockStart);
+      const blockEnd = cursor;
       extendSpan(block.anchorId, blockStart, blockEnd);
-      if (block.partnerFresh) extendSpan(block.partnerId, blockStart, blockEnd);
     }
     for (const [id, span] of spans){
       positions[id] = { x: (span.start + span.end) / 2, depth: rowOf[id] || 0 };
