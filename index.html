@@ -598,9 +598,18 @@ function computeLayout(){
   function hasKnownParents(id){ const p = P(id); return !!(p && (p.fatherId || p.motherId)); }
 
   function sortChildrenIds(ids){
-    // сироты-листья (без своей семьи) — раньше тех, у кого уже есть дети:
-    // иначе "тяжёлый" по потомкам ребёнок отталкивает братьев/сестёр в сторону
+    // женатые/замужние — К КРАЮ ряда братьев и сестёр (после всех
+    // холостых): свободного места под супруга рядом с self нужен
+    // дополнительный слот, и если такого ребёнка поставить в СЕРЕДИНЕ
+    // ряда, этот слот со стороны супруга займёт место у СОСЕДНЕГО брата
+    // или сестры — и жена/муж окажется зажат(а) между чужими карточками,
+    // а не сбоку от своей семьи. Внутри каждой из этих двух групп: сироты-
+    // листья (без своей семьи) — раньше тех, у кого уже есть дети, иначе
+    // "тяжёлый" по потомкам ребёнок отталкивает братьев/сестёр в сторону.
     return ids.slice().sort((a, b) => {
+      const marriedA = (P(a).spouseIds || []).length ? 1 : 0;
+      const marriedB = (P(b).spouseIds || []).length ? 1 : 0;
+      if (marriedA !== marriedB) return marriedA - marriedB;
       const weightA = children(a).length ? 1 : 0;
       const weightB = children(b).length ? 1 : 0;
       if (weightA !== weightB) return weightA - weightB;
