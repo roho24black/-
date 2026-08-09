@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - claude/chto-gde-kogda-app-pa5aj2
+      - claude/family-tree-app-qrrz9y
       - main
   workflow_dispatch:
 
