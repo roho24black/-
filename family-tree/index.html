@@ -840,7 +840,6 @@ function computeLayout(){
     return false;
   }
   const graftedUnits = new Set();
-  const fallbackConnectors = []; // {a,b} — прививка не удалась (наложилась бы на другую ветку): супругов всё равно соединяем чистой веткой (как обычная стволовая линия, без диагоналей)
   for (const link of elsewhereLinks){
     const { block, anchorId, partnerId } = link;
     const partnerRoot = idToRootUnit.get(partnerId);
@@ -852,13 +851,10 @@ function computeLayout(){
     if (!anchorPos || !partnerPos) continue;
     const delta = (anchorPos.x + 1) - partnerPos.x;
     const memberIds = collectUnitIds(partnerRoot);
-    if (wouldCollide(memberIds, delta)){
-      // ветка начинается не от самой карточки anchor, а от той же точки
-      // (pairCenter), где уже центрируются общие дети — так видно, что
-      // дети действительно между родителями, а не просто "висят" у одного
-      fallbackConnectors.push({ a: anchorId, b: partnerId, pairX: anchorPos.x + 0.5, depth: anchorPos.depth });
-      continue;
-    }
+    // если прививка наложится на другую ветку — просто оставляем как
+    // есть (пустой резервный слот уже корректно центрирует общих детей,
+    // без наложений); никакой линии дорисовывать не пытаемся
+    if (wouldCollide(memberIds, delta)) continue;
     for (const id of memberIds){
       const pos = positions[id];
       if (!pos) continue;
@@ -891,7 +887,7 @@ function computeLayout(){
   const width = Math.max(cursorTop, ...Object.values(positions).map(p => p.x + 0.5));
 
   const maxDepth = Math.max(0, ...Object.values(rowOf));
-  return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges: childEdgesOut, width, maxDepth };
+  return { positions, marriageEdges, coupleSlots, childEdges: childEdgesOut, width, maxDepth };
 }
 
 function svgEl(tag, attrs){
@@ -1008,32 +1004,13 @@ function renderTree(){
     fo.appendChild(div);
     nodesLayer.appendChild(fo);
   }
-  // супруги, которых не удалось поставить рядом (иначе их родословные
-  // наложились бы на другие ветки) — всё равно соединяем веткой ТОГО ЖЕ
-  // цвета и толщины, что и все остальные линии дерева (никаких особых
-  // "акцентных" линий — одна ветка и один стиль везде, как в обычном
-  // генеалогическом дереве). Супруги всегда стоят в одной строке, поэтому
-  // это просто нырок под ряд и обратно, без диагоналей и без пунктира.
-  for (const e of layout.fallbackConnectors){
-    const a = layout.positions[e.a], b = layout.positions[e.b];
-    if (!a || !b) continue;
-    // сдвигаем начало веточки чуть в сторону от точки, откуда падает
-    // ствол к детям, и ныряем НИЖЕ его горизонтальной перекладины — иначе
-    // обе линии накладываются друг на друга и на глаз сливаются в
-    // маленькую петлю ("глюк"), а не читаются как две разные линии
-    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
-    if (a.depth === b.depth){
-      const bottomY = py(a.depth) + NODE_H;
-      const dipY = bottomY + 34;
-      linesLayer.appendChild(svgEl("path", {
-        d: `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`,
-        fill: "none", stroke: "var(--line)", "stroke-width": 2
-      }));
-    } else {
-      const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
-      linesLayer.appendChild(svgEl("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "var(--line)", "stroke-width": 2 }));
-    }
-  }
+  // супруг(а), которого(ую) не удалось поставить рядом (иначе родословная
+  // наложилась бы на другую ветку) — намеренно НЕ соединяем никакой линией:
+  // каждая добавленная сюда линия (стрелка, дуга, петля-нырок под ряд)
+  // на практике оказывалась лишней и путала — дерево целиком остаётся
+  // единым стилем из одних только прямых стволовых и коротких брачных
+  // линий. Имя супруга видно текстом на карточке ("⚭ …") — этого хватает,
+  // как и в обычных генеалогических деревьях.
 }
 
 function escapeHtml(s){
@@ -1792,28 +1769,8 @@ function buildExportSvg(layout, w, h, colors){
     }
   }
 
-  // супруги, которых не удалось поставить рядом — соединяем чистой веткой
-  // (та же логика, что и в дереве на экране)
-  for (const e of (layout.fallbackConnectors || [])){
-    const a = layout.positions[e.a], b = layout.positions[e.b];
-    if (!a || !b) continue;
-    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
-    if (a.depth === b.depth){
-      const bottomY = py(a.depth) + NODE_H;
-      const dipY = bottomY + 34;
-      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      p.setAttribute("d", `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`);
-      p.setAttribute("fill", "none");
-      p.setAttribute("stroke", colors.line); p.setAttribute("stroke-width", 2);
-      linesG.appendChild(p);
-    } else {
-      const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
-      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      l.setAttribute("x1", ax); l.setAttribute("y1", ay); l.setAttribute("x2", bx); l.setAttribute("y2", by);
-      l.setAttribute("stroke", colors.line); l.setAttribute("stroke-width", 2);
-      linesG.appendChild(l);
-    }
-  }
+  // супруг(а), которого(ую) не удалось поставить рядом — намеренно НЕ
+  // соединяем никакой линией (см. комментарий в renderTree)
   return svg;
 }
 
