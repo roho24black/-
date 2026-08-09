@@ -674,7 +674,7 @@ function computeLayout(){
       const block = { anchorId, partnerId: g.partnerId || null, partnerFresh, needsRefChip, childUnits };
       blocksArr.push(block);
       if (g.childIds.length){
-        childEdgesOut.push({ parentAId: anchorId, parentBId: g.partnerId || null, childIds: childUnits.map(cu => cu.id) });
+        childEdgesOut.push({ parentAId: anchorId, parentBId: g.partnerId || null, childIds: childUnits.map(cu => cu.id), usesChip: needsRefChip });
       }
       if (partnerFresh){
         extendChain(g.partnerId, blocksArr); // продолжаем цепочку (повторный брак) в той же строке
@@ -781,8 +781,12 @@ function computeLayout(){
       positions[id] = { x: (span.start + span.end) / 2, depth: rowOf[id] || 0 };
     }
   }
+  // между отдельными, никак не связанными родами оставляем зазор пошире —
+  // иначе они стоят вплотную и на глаз сливаются в одну ветку
+  const FOREST_GAP = 1.5;
   let cursorTop = 0;
-  for (const u of forest){ assignPositions(u, cursorTop); cursorTop += u.width; }
+  for (const u of forest){ assignPositions(u, cursorTop); cursorTop += u.width + FOREST_GAP; }
+  if (forest.length) cursorTop -= FOREST_GAP;
 
   const maxDepth = Math.max(0, ...Object.values(rowOf));
   return { positions, marriageEdges, childEdges: childEdgesOut, refChips, width: cursorTop, maxDepth };
@@ -823,6 +827,16 @@ function renderTree(){
   function px(slotX){ return PAD + slotX * SLOT_W; }
   function py(depth){ return PAD + depth * ROW_H; }
 
+  const defs = svgEl("defs", {});
+  const arrowMarker = svgEl("marker", {
+    id: "refArrowHead", viewBox: "0 0 10 10", refX: "8", refY: "5",
+    markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse"
+  });
+  const arrowPath = svgEl("path", { d: "M0,0 L10,5 L0,10 z", fill: "var(--accent-2)" });
+  arrowMarker.appendChild(arrowPath);
+  defs.appendChild(arrowMarker);
+  svg.appendChild(defs);
+
   const linesLayer = svgEl("g", {});
   const nodesLayer = svgEl("g", {});
   svg.appendChild(linesLayer);
@@ -842,12 +856,23 @@ function renderTree(){
 
   // линии родитель-ребёнок (у каждого ребёнка своя реальная строка —
   // это важно, если он в браке с кем-то из совсем другого поколения дерева)
+  const chipXByKey = new Map();
+  for (const chip of layout.refChips) chipXByKey.set(chip.anchorId + "~" + chip.targetId, chip.x);
   for (const e of layout.childEdges){
     const posA = layout.positions[e.parentAId];
-    const posB = e.parentBId ? layout.positions[e.parentBId] : null;
     if (!posA) continue;
     const parentDepth = posA.depth;
-    const midX = posB ? (px(posA.x) + px(posB.x)) / 2 : px(posA.x);
+    // если у второго родителя тут карточка-ссылка (он сам занят у своих
+    // родителей), центрируем стволовую линию по позиции ЭТОЙ ссылки, а не
+    // по настоящей (возможно, далёкой) позиции второго родителя — иначе
+    // ряд детей визуально "съезжал" в сторону его реального местоположения
+    let posBx = null;
+    if (e.usesChip){
+      posBx = chipXByKey.get(e.parentAId + "~" + e.parentBId);
+    } else if (e.parentBId && layout.positions[e.parentBId]){
+      posBx = layout.positions[e.parentBId].x;
+    }
+    const midX = (posBx != null) ? (px(posA.x) + px(posBx)) / 2 : px(posA.x);
     const parentBottomY = py(parentDepth) + NODE_H;
     const trunkY = parentBottomY + 22;
     const kidPositions = e.childIds.map(cid => layout.positions[cid]).filter(Boolean);
@@ -891,20 +916,24 @@ function renderTree(){
     nodesLayer.appendChild(fo);
   }
 
-  // карточки-ссылки на "занятых" супругов — короткая пунктирная линия +
+  // карточки-ссылки на "занятых" супругов — пунктирная СТРЕЛКА (с
+  // наконечником, от края карточки до края карточки, а не от центра) +
   // компактная кликабельная карточка с именем, ведущая к настоящей позиции
+  const chipW = 108;
   for (const chip of layout.refChips){
     const target = P(chip.targetId);
     if (!target) continue;
     const anchorPos = layout.positions[chip.anchorId];
     if (anchorPos){
       const y = py(anchorPos.depth) + NODE_H/2;
+      const x1 = px(anchorPos.x) + NODE_W/2;
+      const x2 = px(chip.x) - chipW/2 - 2;
       linesLayer.appendChild(svgEl("line", {
-        x1: px(anchorPos.x), y1: y, x2: px(chip.x), y2: y,
-        stroke: "var(--line)", "stroke-width": 2, "stroke-dasharray": "4 4"
+        x1, y1: y, x2, y2: y,
+        stroke: "var(--accent-2)", "stroke-width": 2.5, "stroke-dasharray": "5 4",
+        "marker-end": "url(#refArrowHead)"
       }));
     }
-    const chipW = 130;
     const fo = svgEl("foreignObject", { x: px(chip.x) - chipW/2, y: py(chip.depth), width: chipW, height: NODE_H + 20 });
     const div = document.createElement("div");
     div.className = "ref-chip";
@@ -1595,6 +1624,20 @@ function buildExportSvg(layout, w, h, colors){
   bg.setAttribute("fill", colors.bg);
   svg.appendChild(bg);
 
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const arrowMarker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  arrowMarker.setAttribute("id", "refArrowHeadExp");
+  arrowMarker.setAttribute("viewBox", "0 0 10 10");
+  arrowMarker.setAttribute("refX", "8"); arrowMarker.setAttribute("refY", "5");
+  arrowMarker.setAttribute("markerWidth", "7"); arrowMarker.setAttribute("markerHeight", "7");
+  arrowMarker.setAttribute("orient", "auto-start-reverse");
+  const arrowPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  arrowPath.setAttribute("d", "M0,0 L10,5 L0,10 z");
+  arrowPath.setAttribute("fill", colors.accent2);
+  arrowMarker.appendChild(arrowPath);
+  defs.appendChild(arrowMarker);
+  svg.appendChild(defs);
+
   function px(slotX){ return PAD + slotX * SLOT_W; }
   function py(depth){ return PAD + depth * ROW_H; }
 
@@ -1614,11 +1657,18 @@ function buildExportSvg(layout, w, h, colors){
     const y = py(a.depth) + NODE_H/2;
     line(px(a.x), y, px(b.x), y);
   }
+  const chipXByKeyExp = new Map();
+  for (const chip of (layout.refChips || [])) chipXByKeyExp.set(chip.anchorId + "~" + chip.targetId, chip.x);
   for (const e of layout.childEdges){
     const posA = layout.positions[e.parentAId];
-    const posB = e.parentBId ? layout.positions[e.parentBId] : null;
     if (!posA) continue;
-    const midX = posB ? (px(posA.x) + px(posB.x)) / 2 : px(posA.x);
+    let posBx = null;
+    if (e.usesChip){
+      posBx = chipXByKeyExp.get(e.parentAId + "~" + e.parentBId);
+    } else if (e.parentBId && layout.positions[e.parentBId]){
+      posBx = layout.positions[e.parentBId].x;
+    }
+    const midX = (posBx != null) ? (px(posA.x) + px(posBx)) / 2 : px(posA.x);
     const parentBottomY = py(posA.depth) + NODE_H;
     const trunkY = parentBottomY + 22;
     const kidPositions = e.childIds.map(cid => layout.positions[cid]).filter(Boolean);
@@ -1667,6 +1717,7 @@ function buildExportSvg(layout, w, h, colors){
   }
 
   // карточки-ссылки на "занятых" супругов (та же дуга, что и в дереве на экране)
+  const chipWExp = 108;
   for (const chip of (layout.refChips || [])){
     const target = P(chip.targetId);
     if (!target) continue;
@@ -1674,13 +1725,14 @@ function buildExportSvg(layout, w, h, colors){
     if (anchorPos){
       const y = py(anchorPos.depth) + NODE_H/2;
       const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      l.setAttribute("x1", px(anchorPos.x)); l.setAttribute("y1", y);
-      l.setAttribute("x2", px(chip.x)); l.setAttribute("y2", y);
-      l.setAttribute("stroke", colors.line); l.setAttribute("stroke-width", 2);
-      l.setAttribute("stroke-dasharray", "4 4");
+      l.setAttribute("x1", px(anchorPos.x) + NODE_W/2); l.setAttribute("y1", y);
+      l.setAttribute("x2", px(chip.x) - chipWExp/2 - 2); l.setAttribute("y2", y);
+      l.setAttribute("stroke", colors.accent2); l.setAttribute("stroke-width", 2.5);
+      l.setAttribute("stroke-dasharray", "5 4");
+      l.setAttribute("marker-end", "url(#refArrowHeadExp)");
       linesG.appendChild(l);
     }
-    const chipW = 130;
+    const chipW = chipWExp;
     const cx2 = px(chip.x), cy = py(chip.depth) + NODE_H/2;
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     rect.setAttribute("x", cx2 - chipW/2); rect.setAttribute("y", cy - 20);
