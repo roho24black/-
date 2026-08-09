@@ -1009,10 +1009,11 @@ function renderTree(){
     nodesLayer.appendChild(fo);
   }
   // супруги, которых не удалось поставить рядом (иначе их родословные
-  // наложились бы на другие ветки) — всё равно соединяем чистой веткой:
-  // супруги всегда стоят в одной строке, поэтому это просто нырок под
-  // ряд и обратно — та же орфографика, что и у обычных стволовых линий,
-  // без диагоналей и без пунктира
+  // наложились бы на другие ветки) — всё равно соединяем веткой ТОГО ЖЕ
+  // цвета и толщины, что и все остальные линии дерева (никаких особых
+  // "акцентных" линий — одна ветка и один стиль везде, как в обычном
+  // генеалогическом дереве). Супруги всегда стоят в одной строке, поэтому
+  // это просто нырок под ряд и обратно, без диагоналей и без пунктира.
   for (const e of layout.fallbackConnectors){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     if (!a || !b) continue;
@@ -1026,11 +1027,11 @@ function renderTree(){
       const dipY = bottomY + 34;
       linesLayer.appendChild(svgEl("path", {
         d: `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`,
-        fill: "none", stroke: "var(--accent-2)", "stroke-width": 2
+        fill: "none", stroke: "var(--line)", "stroke-width": 2
       }));
     } else {
       const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
-      linesLayer.appendChild(svgEl("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "var(--accent-2)", "stroke-width": 2 }));
+      linesLayer.appendChild(svgEl("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "var(--line)", "stroke-width": 2 }));
     }
   }
 }
@@ -1803,13 +1804,13 @@ function buildExportSvg(layout, w, h, colors){
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`);
       p.setAttribute("fill", "none");
-      p.setAttribute("stroke", colors.accent2); p.setAttribute("stroke-width", 2);
+      p.setAttribute("stroke", colors.line); p.setAttribute("stroke-width", 2);
       linesG.appendChild(p);
     } else {
       const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
       const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
       l.setAttribute("x1", ax); l.setAttribute("y1", ay); l.setAttribute("x2", bx); l.setAttribute("y2", by);
-      l.setAttribute("stroke", colors.accent2); l.setAttribute("stroke-width", 2);
+      l.setAttribute("stroke", colors.line); l.setAttribute("stroke-width", 2);
       linesG.appendChild(l);
     }
   }
