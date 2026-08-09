@@ -709,56 +709,21 @@ function computeLayout(){
   // подстраховка: кто-то не попал (битые ссылки на несуществующих родителей)
   for (const p of allPersons()){ if (!visited.has(p.id)){ const u = buildUnit(p.id); if (u) forest.push(u); } }
 
-  // ---- Прививка: супруг(а), у которого(ой) есть свои известные родители,
-  // получает позицию через СВОЁ родословное поддерево — оно строится
-  // отдельным корнем "леса" (см. выше). Чтобы супруги всё равно стояли
-  // РЯДОМ, а их дети — ТОЧНО между ними, а не под одним из родителей,
-  // здесь мы находим то самостоятельное поддерево целиком (по любому из
-  // входящих в него id) и физически "пересаживаем" его вплотную к месту
-  // партнёра — вместе со всей его собственной родословной, которая при
-  // этом остаётся связанной и корректной, просто едет как единое целое.
-  const idToRootUnit = new Map();
-  (function indexForest(){
-    function walk(unit, root){
-      idToRootUnit.set(unit.id, root);
-      for (const block of unit.blocks){
-        if (block.partnerId) idToRootUnit.set(block.partnerId, root);
-        for (const cu of block.childUnits) walk(cu, root);
-      }
-    }
-    for (const u of forest) walk(u, u);
-  })();
-  const graftedUnits = new Set();
-  for (const link of elsewhereLinks){
-    const { block, anchorId, partnerId } = link;
-    const partnerRoot = idToRootUnit.get(partnerId);
-    const anchorRoot = idToRootUnit.get(anchorId);
-    // нельзя прививать дерево само к себе (супруги внутри одного и того
-    // же рода — например, женился на дальней родственнице) и нельзя
-    // прививать уже привитое кем-то другим поддерево дважды
-    if (!partnerRoot || partnerRoot === anchorRoot || graftedUnits.has(partnerRoot)) continue;
-    const idx = forest.indexOf(partnerRoot);
-    if (idx === -1) continue;
-    forest.splice(idx, 1);
-    graftedUnits.add(partnerRoot);
-    block.graftedUnit = partnerRoot;
-  }
-
   // ---- Проход 2: снизу вверх считаем ширину (в "слотах") каждого юнита ----
-  // self занимает 1 слот; если рядом реально встаёт партнёр (свежий или
-  // привитое дерево) — плюс его ширина; если это лишь резерв "пустого"
-  // места (партнёра пристроить рядом не удалось — редкий сложный случай)
-  // — плюс 1. Так дети всегда центрируются МЕЖДУ self и этим соседом.
+  // self занимает 1 слот; если рядом реально встаёт партнёр (свежий) или
+  // просто резервируется пустое место под него (партнёр размещён отдельно)
+  // — плюс 1. Так дети всегда центрируются МЕЖДУ self и этим соседом, а не
+  // строго под одним из родителей. Каждый корень "леса" при этом кладётся
+  // независимо и гарантированно без наложений — это безопасная базовая
+  // раскладка, поверх которой ниже пробуем аккуратно "притянуть" супругов.
   function computeWidth(unit){
     let blocksWidth = 0;
     for (const block of unit.blocks){
       let kidsW = 0;
       for (const cu of block.childUnits) kidsW += computeWidth(cu);
       block.kidsWidth = kidsW;
-      if (block.graftedUnit) computeWidth(block.graftedUnit);
-      const rightW = block.partnerFresh ? 1 : block.graftedUnit ? block.graftedUnit.width : block.partnerElsewhere ? 1 : 0;
-      const hasPair = block.partnerFresh || block.graftedUnit || block.partnerElsewhere;
-      block.width = hasPair ? Math.max(kidsW, 1 + rightW) : kidsW;
+      const hasPair = block.partnerFresh || block.partnerElsewhere;
+      block.width = hasPair ? Math.max(kidsW, 2) : kidsW;
       blocksWidth += block.width;
     }
     unit.width = Math.max(blocksWidth, 1);
@@ -770,7 +735,7 @@ function computeLayout(){
   //      родителя (и каждого "пристёгнутого" по цепочке партнёра) над
   //      суммарной шириной того, что от него зависит ----
   const positions = {};
-  const coupleSlots = []; // {anchorId, partnerId, x, depth} — редкий случай, когда партнёра пристроить рядом не удалось: пустой слот только для центрирования детей, сам не рисуется
+  const coupleSlots = []; // {anchorId, partnerId, x, depth} — пустой слот рядом с self, зарезервированный под партнёра; нужен для центрирования детей, даже если саму "прививку" ниже сделать не получится
   function assignPositions(unit, offset){
     if (!unit.blocks.length){
       positions[unit.id] = { x: offset + 0.5, depth: rowOf[unit.id] || 0 };
@@ -786,31 +751,18 @@ function computeLayout(){
     }
     for (const block of unit.blocks){
       const blockStart = cursor;
-      if (block.partnerFresh || block.graftedUnit || block.partnerElsewhere){
-        // дети центрируются внутри зарезервированной ширины блока — т.е.
-        // МЕЖДУ self и партнёром (реальным соседом или привитым деревом),
-        // а не строго под одним из родителей
+      if (block.partnerFresh || block.partnerElsewhere){
+        // дети центрируются внутри зарезервированной ширины блока (МЕЖДУ
+        // self и партнёром/его пустым слотом), а не строго под родителем
         const kidsOffset = blockStart + (block.width - block.kidsWidth) / 2;
         let kc = kidsOffset;
         for (const cu of block.childUnits){ assignPositions(cu, kc); kc += cu.width; }
-        const rightW = block.partnerFresh ? 1 : block.graftedUnit ? block.graftedUnit.width : 1;
-        const pairWidth = 1 + rightW;
-        const pairStart = blockStart + (block.width - pairWidth) / 2;
-        fixedX.set(block.anchorId, pairStart + 0.5);
+        const pairCenter = blockStart + block.width / 2;
+        fixedX.set(block.anchorId, pairCenter - 0.5);
         if (block.partnerFresh){
-          positions[block.partnerId] = { x: pairStart + 1 + 0.5, depth: rowOf[block.partnerId] || 0 };
-        } else if (block.graftedUnit){
-          // сначала "пробный" прогон с нуля, чтобы узнать, где партнёр
-          // окажется внутри своего привитого поддерева (он может быть не
-          // в его корне, а на несколько поколений ниже) — затем сдвигаем
-          // ВСЁ поддерево целиком на нужную разницу, чтобы партнёр встал
-          // ровно рядом с self, а вся его родословная поехала вместе с ним
-          assignPositions(block.graftedUnit, 0);
-          const desired = pairStart + 1 + 0.5;
-          const delta = desired - positions[block.partnerId].x;
-          assignPositions(block.graftedUnit, delta);
+          positions[block.partnerId] = { x: pairCenter + 0.5, depth: rowOf[block.partnerId] || 0 };
         } else {
-          coupleSlots.push({ anchorId: block.anchorId, partnerId: block.partnerId, x: pairStart + 1 + 0.5, depth: rowOf[block.anchorId] || 0 });
+          coupleSlots.push({ anchorId: block.anchorId, partnerId: block.partnerId, x: pairCenter + 0.5, depth: rowOf[block.anchorId] || 0 });
         }
         cursor = blockStart + block.width;
       } else {
@@ -834,16 +786,109 @@ function computeLayout(){
   for (const u of forest){ assignPositions(u, cursorTop); cursorTop += u.width + FOREST_GAP; }
   if (forest.length) cursorTop -= FOREST_GAP;
 
-  // теперь, когда точно известно, удалась ли "прививка", проставляем
-  // финальные флаги для рендера стволовых линий и убираем служебную ссылку
+  // ---- Прививка: супруг(а) со своими известными родителями получил(а)
+  // позицию через СВОЁ, независимо построенное родословное поддерево (это
+  // и есть безопасная база выше). Чтобы супруги стояли РЯДОМ, а их дети —
+  // ТОЧНО между ними, пробуем физически подвинуть ВСЁ это поддерево
+  // целиком (вместе со всей его роднёй) вплотную к партнёру. Двигаем
+  // только тогда, когда точно проверили: подвинутое поддерево нигде, ни
+  // на одном из своих "этажей", не наложится ни на одного человека из
+  // любой другой ветки дерева. Если наложится — оставляем как есть (пустой
+  // резервный слот уже корректно центрирует детей, без всяких наложений).
+  const idToRootUnit = new Map();
+  (function indexForest(){
+    function walk(unit, root){
+      idToRootUnit.set(unit.id, root);
+      for (const block of unit.blocks){
+        if (block.partnerId) idToRootUnit.set(block.partnerId, root);
+        for (const cu of block.childUnits) walk(cu, root);
+      }
+    }
+    for (const u of forest) walk(u, u);
+  })();
+  function collectUnitIds(unit){
+    const ids = [];
+    (function walk(u){
+      ids.push(u.id);
+      for (const block of u.blocks){
+        if (block.partnerId) ids.push(block.partnerId);
+        for (const cu of block.childUnits) walk(cu);
+      }
+    })(unit);
+    return ids;
+  }
+  const depthBuckets = new Map(); // depth -> Map(id -> x)
+  for (const id in positions){
+    const pos = positions[id];
+    if (!depthBuckets.has(pos.depth)) depthBuckets.set(pos.depth, new Map());
+    depthBuckets.get(pos.depth).set(id, pos.x);
+  }
+  const MIN_GAP = 0.999; // минимум между центрами соседних карточек на одном этаже (1 слот = впритык)
+  function wouldCollide(memberIds, delta){
+    const memberSet = new Set(memberIds);
+    for (const id of memberIds){
+      const pos = positions[id];
+      if (!pos) continue;
+      const bucket = depthBuckets.get(pos.depth);
+      if (!bucket) continue;
+      const nx = pos.x + delta;
+      for (const [otherId, ox] of bucket){
+        if (memberSet.has(otherId)) continue; // сравниваем только с ЧУЖИМИ, не с самим собой
+        if (Math.abs(nx - ox) < MIN_GAP) return true;
+      }
+    }
+    return false;
+  }
+  const graftedUnits = new Set();
+  const fallbackConnectors = []; // {a,b} — прививка не удалась (наложилась бы на другую ветку): супругов всё равно соединяем чистой веткой (как обычная стволовая линия, без диагоналей)
+  for (const link of elsewhereLinks){
+    const { block, anchorId, partnerId } = link;
+    const partnerRoot = idToRootUnit.get(partnerId);
+    const anchorRoot = idToRootUnit.get(anchorId);
+    // нельзя прививать дерево само к себе (супруги внутри одного и того же
+    // рода) и нельзя прививать уже привитое кем-то другим поддерево дважды
+    if (!partnerRoot || partnerRoot === anchorRoot || graftedUnits.has(partnerRoot)) continue;
+    const anchorPos = positions[anchorId], partnerPos = positions[partnerId];
+    if (!anchorPos || !partnerPos) continue;
+    const delta = (anchorPos.x + 1) - partnerPos.x;
+    const memberIds = collectUnitIds(partnerRoot);
+    if (wouldCollide(memberIds, delta)){
+      fallbackConnectors.push({ a: anchorId, b: partnerId });
+      continue;
+    }
+    for (const id of memberIds){
+      const pos = positions[id];
+      if (!pos) continue;
+      const oldBucket = depthBuckets.get(pos.depth);
+      if (oldBucket) oldBucket.delete(id);
+      pos.x += delta;
+      if (!depthBuckets.has(pos.depth)) depthBuckets.set(pos.depth, new Map());
+      depthBuckets.get(pos.depth).set(id, pos.x);
+    }
+    graftedUnits.add(partnerRoot);
+    block.graftedOk = true;
+  }
+
+  // финальные флаги для рендера стволовых линий (теперь точно известно,
+  // удалась ли "прививка") + служебная ссылка на block больше не нужна
   for (const e of childEdgesOut){
-    e.parentBAdjacent = !!(e.block.partnerFresh || e.block.graftedUnit);
-    e.hasCoupleSlot = !!e.block.partnerElsewhere && !e.block.graftedUnit;
+    e.parentBAdjacent = !!(e.block.partnerFresh || e.block.graftedOk);
+    e.hasCoupleSlot = !!e.block.partnerElsewhere && !e.block.graftedOk;
     delete e.block;
   }
 
+  // прививка могла сдвинуть часть дерева влево за 0 или вправо за исходную
+  // ширину — приводим все координаты в неотрицательный диапазон и берём
+  // фактическую итоговую ширину холста
+  const allXs = Object.values(positions).map(p => p.x);
+  const minX = Math.min(0, ...allXs);
+  if (minX < 0){
+    for (const id in positions) positions[id].x -= minX;
+  }
+  const width = Math.max(cursorTop, ...Object.values(positions).map(p => p.x + 0.5));
+
   const maxDepth = Math.max(0, ...Object.values(rowOf));
-  return { positions, marriageEdges, coupleSlots, childEdges: childEdgesOut, width: cursorTop, maxDepth };
+  return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges: childEdgesOut, width, maxDepth };
 }
 
 function svgEl(tag, attrs){
@@ -960,10 +1005,27 @@ function renderTree(){
     fo.appendChild(div);
     nodesLayer.appendChild(fo);
   }
-  // супруг(а), размещённый(ая) отдельно (у своих родителей), намеренно НЕ
-  // соединяется никакой линией через всё дерево — это и выглядело криво,
-  // и захламляло картину. Имя супруга и так видно текстом на карточке
-  // ("⚭ …"), этого достаточно, как в обычных генеалогических деревьях.
+  // супруги, которых не удалось поставить рядом (иначе их родословные
+  // наложились бы на другие ветки) — всё равно соединяем чистой веткой:
+  // супруги всегда стоят в одной строке, поэтому это просто нырок под
+  // ряд и обратно — та же орфографика, что и у обычных стволовых линий,
+  // без диагоналей и без пунктира
+  for (const e of layout.fallbackConnectors){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    if (!a || !b) continue;
+    const ax = px(a.x), bx = px(b.x);
+    if (a.depth === b.depth){
+      const bottomY = py(a.depth) + NODE_H;
+      const dipY = bottomY + 22;
+      linesLayer.appendChild(svgEl("path", {
+        d: `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`,
+        fill: "none", stroke: "var(--accent-2)", "stroke-width": 2, "stroke-linejoin": "round"
+      }));
+    } else {
+      const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
+      linesLayer.appendChild(svgEl("line", { x1: ax, y1: ay, x2: bx, y2: by, stroke: "var(--accent-2)", "stroke-width": 2 }));
+    }
+  }
 }
 
 function escapeHtml(s){
@@ -1722,8 +1784,29 @@ function buildExportSvg(layout, w, h, colors){
     }
   }
 
-  // супруг(а), размещённый(ая) отдельно, намеренно не соединяется никакой
-  // линией через всё дерево — имя супруга и так видно текстом на карточке
+  // супруги, которых не удалось поставить рядом — соединяем чистой веткой
+  // (та же логика, что и в дереве на экране)
+  for (const e of (layout.fallbackConnectors || [])){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    if (!a || !b) continue;
+    const ax = px(a.x), bx = px(b.x);
+    if (a.depth === b.depth){
+      const bottomY = py(a.depth) + NODE_H;
+      const dipY = bottomY + 22;
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", `M ${ax} ${bottomY} L ${ax} ${dipY} L ${bx} ${dipY} L ${bx} ${bottomY}`);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke-linejoin", "round");
+      p.setAttribute("stroke", colors.accent2); p.setAttribute("stroke-width", 2);
+      linesG.appendChild(p);
+    } else {
+      const ay = py(a.depth) + NODE_H/2, by = py(b.depth) + NODE_H/2;
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      l.setAttribute("x1", ax); l.setAttribute("y1", ay); l.setAttribute("x2", bx); l.setAttribute("y2", by);
+      l.setAttribute("stroke", colors.accent2); l.setAttribute("stroke-width", 2);
+      linesG.appendChild(l);
+    }
+  }
   return svg;
 }
 
