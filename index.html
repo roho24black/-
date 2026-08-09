@@ -357,9 +357,12 @@ function yearOf(s){
   return m ? m[0] : "";
 }
 function lifeSpan(p){
-  const by = yearOf(p.birthDate), dy = yearOf(p.deathDate);
-  if (!by && !dy) return "";
-  return (by||"?") + "–" + (dy||"");
+  // Полные даты, как их ввели (не только год) — если известна лишь
+  // часть даты, показываем как есть, ничего не обрезаем.
+  const b = (p.birthDate || "").trim();
+  const d = (p.deathDate || "").trim();
+  if (!b && !d) return "";
+  return (b || "?") + "–" + d;
 }
 function initials(p){
   const a = (p.firstName||"").trim()[0] || "";
@@ -1600,7 +1603,7 @@ function buildExportSvg(layout, w, h, colors){
     const lines = [];
     lines.push({ t: truncateForBox(fullName(p) + (p.deathDate ? " †" : ""), 24), size: 12.5, weight: "700", color: colors.ink });
     if (p.maidenName) lines.push({ t: truncateForBox("урожд. " + p.maidenName, 22), size: 10.5, style: "italic", color: colors.muted });
-    if (lifeSpan(p)) lines.push({ t: lifeSpan(p), size: 10.5, color: colors.muted });
+    if (lifeSpan(p)) lines.push({ t: truncateForBox(lifeSpan(p), 24), size: 10.5, color: colors.muted });
     if (p.birthPlace) lines.push({ t: truncateForBox("📍 " + p.birthPlace, 22), size: 10, color: colors.muted });
     const spouseNames = (p.spouseIds||[]).map(sid => P(sid)).filter(Boolean).map(s => fullName(s));
     if (spouseNames.length) lines.push({ t: truncateForBox("⚭ " + spouseNames.join(", "), 22), size: 10, color: colors.accent2 });
