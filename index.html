@@ -514,33 +514,19 @@ function coParentGroups(personId){
 /* ---------------------------------------------------------------- */
 const SLOT_W = 260, NODE_W = 176, NODE_H = 74, ROW_H = 190, PAD = 20;
 
-/* Ряд (поколение) для каждого человека: считается независимо от порядка
-   обхода через релаксацию двух правил — "ребёнок минимум на 1 ряд ниже
-   родителя" и "супруги стоят в одном ряду" — до достижения устойчивого
-   состояния. Это гарантирует правильные соединительные линии независимо
-   от того, в каком порядке вводились люди (сначала супруг(а) или сначала
-   родители). */
+/* "Естественная" глубина (ряд) каждого человека — ТОЛЬКО по кровным
+   связям родитель → ребёнок, без оглядки на браки. Выравнивание рядов
+   женатых пар из независимых родословных (когда у одной стороны предков
+   записано меньше поколений) делается позже, в computeLayout() — там уже
+   построен лес юнитов, и понятно, какие люди на самом деле принадлежат
+   одному роду, а какие связаны только через общего ребёнка от разных
+   родословных (см. комментарий у "alignGenerations" ниже). */
 function computeRows(){
   const people = allPersons();
   const row = {};
   people.forEach(p => { row[p.id] = 0; });
-
-  const pairKeys = new Set();
-  const pairs = [];
-  function addPair(a, b){
-    if (!a || !b || a === b) return;
-    const key = [a,b].sort().join("~");
-    if (pairKeys.has(key)) return;
-    pairKeys.add(key);
-    pairs.push([a,b]);
-  }
-  for (const p of people){
-    for (const sid of (p.spouseIds||[])){ if (DB.persons[sid]) addPair(p.id, sid); }
-    if (p.fatherId && p.motherId && DB.persons[p.fatherId] && DB.persons[p.motherId]) addPair(p.fatherId, p.motherId);
-  }
-
   let changed = true;
-  let guard = people.length + pairs.length + 20;
+  let guard = people.length + 20;
   while (changed && guard-- > 0){
     changed = false;
     for (const p of people){
@@ -552,11 +538,6 @@ function computeRows(){
         const need = row[p.motherId] + 1;
         if (need > row[p.id]){ row[p.id] = need; changed = true; }
       }
-    }
-    for (const [a,b] of pairs){
-      const d = Math.max(row[a], row[b]);
-      if (row[a] !== d){ row[a] = d; changed = true; }
-      if (row[b] !== d){ row[b] = d; changed = true; }
     }
   }
   return row;
@@ -705,6 +686,95 @@ function computeLayout(){
   for (const r of roots){ const u = buildUnit(r.id); if (u) forest.push(u); }
   for (const p of allPersons()){ if (!visited.has(p.id)){ const u = buildUnit(p.id); if (u) forest.push(u); } } // подстраховка от битых ссылок на родителей
 
+  // ---- Шаг 1б: выравниваем ряды женатых пар из разных родословных ------
+  // rowOf посчитан ТОЛЬКО по своим предкам (см. computeRows) — если у
+  // одной стороны брака поколений записано меньше, её нужно целиком
+  // сдвинуть вниз (сохраняя разрывы между ЕЁ ЖЕ поколениями), а не просто
+  // подтянуть одного человека, оставив его собственных родителей на
+  // месте — иначе между ними появляется пустой разрыв в несколько рядов
+  // (а чужой, никак не связанный предок мог случайно оказаться на одном
+  // ряду с чьими-то родителями).
+  //
+  // "Своя родословная целиком" — это НЕ произвольная группировка по
+  // родитель↔ребёнок рёбрам (общий ребёнок от двух РАЗНЫХ родословных
+  // склеил бы их в одну кучу — а это ровно тот случай, ради которого
+  // вообще нужно выравнивание). Это именно юнит леса, построенный ШАГОМ
+  // ВЫШЕ — там при конфликте общего ребёнка приоритет уже отдан известным
+  // предкам, поэтому там границы родов настоящие, а не случайные.
+  // partnerId с partnerElsewhere=true — это ЧУЖОЙ человек: он лишь
+  // упомянут здесь для центрирования детей, а его настоящее место — в
+  // СВОЁМ собственном юните где-то в другом месте леса (у него самого
+  // есть известные родители). И rootOf, и membersOf ниже обязаны видеть в
+  // нём члена ТОЛЬКО того, чужого дерева — иначе, например, при выравнивании
+  // рядов брака (a=его собственное дерево, b=дерево анкора-супруга) он
+  // попадал бы в состав ДВИГАЕМОГО дерева партнёра, и на следующем шаге
+  // его же собственный ряд снова расходился бы с самим собой — сдвиг
+  // применялся бы бесконечно, без сходимости (ряд убегал в тысячи).
+  // В membersOf() учитываем только partnerFresh: такому партнёру ДЕЙСТВИТЕЛЬНО
+  // больше негде получить позицию, кроме как здесь.
+  const rootOf = new Map(); // id -> корневой юнит "леса", которому принадлежит
+  (function indexForest(){
+    function walk(unit, root){
+      rootOf.set(unit.id, root);
+      for (const block of unit.blocks){
+        if (block.partnerId && block.partnerFresh) rootOf.set(block.partnerId, root);
+        for (const cu of block.childUnits) walk(cu, root);
+      }
+    }
+    for (const u of forest) walk(u, u);
+  })();
+  function membersOf(unit){
+    const ids = [];
+    (function walk(u){
+      ids.push(u.id);
+      for (const block of u.blocks){
+        if (block.partnerId && block.partnerFresh) ids.push(block.partnerId);
+        for (const cu of block.childUnits) walk(cu);
+      }
+    })(unit);
+    return ids;
+  }
+  (function alignGenerations(){
+    const pairKeys = new Set();
+    const pairs = [];
+    function addPair(a, b){
+      if (!a || !b || a === b) return;
+      const key = coupleKey(a, b);
+      if (pairKeys.has(key)) return;
+      pairKeys.add(key);
+      pairs.push([a, b]);
+    }
+    for (const p of allPersons()){
+      for (const sid of (p.spouseIds || [])){ if (P(sid)) addPair(p.id, sid); }
+      if (p.fatherId && p.motherId && P(p.fatherId) && P(p.motherId)) addPair(p.fatherId, p.motherId);
+    }
+    let changed = true;
+    let guard = allPersons().length + pairs.length + 20;
+    while (changed && guard-- > 0){
+      changed = false;
+      for (const [a, b] of pairs){
+        if (rowOf[a] === rowOf[b]) continue;
+        const rootA = rootOf.get(a), rootB = rootOf.get(b);
+        if (!rootA || !rootB || rootA === rootB){
+          // брак внутри одного рода (или человек без известных предков) —
+          // сдвигать нечего, просто уравниваем этих двоих
+          const d = Math.max(rowOf[a], rowOf[b]);
+          if (rowOf[a] !== d){ rowOf[a] = d; changed = true; }
+          if (rowOf[b] !== d){ rowOf[b] = d; changed = true; }
+          continue;
+        }
+        const delta = rowOf[a] - rowOf[b];
+        if (delta > 0){
+          for (const id of membersOf(rootB)) rowOf[id] += delta;
+          changed = true;
+        } else if (delta < 0){
+          for (const id of membersOf(rootA)) rowOf[id] += -delta;
+          changed = true;
+        }
+      }
+    }
+  })();
+
   // ---- Шаг 2: ширины снизу вверх ---------------------------------
   // self занимает 1 слот; если рядом реально встаёт партнёр или хотя бы
   // резервируется под него пустое место — плюс 1. Так дети всегда
@@ -778,29 +848,7 @@ function computeLayout(){
   // точно проверено: подвинутая ветка нигде не наложится ни на кого из
   // остального дерева. Если наложится — не трогаем ничьи координаты (обе
   // стороны и так корректны, без наложений), а супругов просто соединяем
-  // прямой веткой при рендере.
-  const rootOf = new Map(); // id -> корневой юнит "леса", которому принадлежит
-  (function indexForest(){
-    function walk(unit, root){
-      rootOf.set(unit.id, root);
-      for (const block of unit.blocks){
-        if (block.partnerId) rootOf.set(block.partnerId, root);
-        for (const cu of block.childUnits) walk(cu, root);
-      }
-    }
-    for (const u of forest) walk(u, u);
-  })();
-  function membersOf(unit){
-    const ids = [];
-    (function walk(u){
-      ids.push(u.id);
-      for (const block of u.blocks){
-        if (block.partnerId) ids.push(block.partnerId);
-        for (const cu of block.childUnits) walk(cu);
-      }
-    })(unit);
-    return ids;
-  }
+  // прямой веткой при рендере. (rootOf/membersOf уже построены в шаге 1б.)
 
   const byDepth = new Map(); // depth -> Map(id -> x), для проверки наложений
   for (const id in positions){
@@ -841,20 +889,40 @@ function computeLayout(){
   for (const { block, anchorId, partnerId } of pendingSpouseLinks){
     const partnerRoot = rootOf.get(partnerId);
     const anchorRoot = rootOf.get(anchorId);
-    // нельзя двигать дерево само на себя (супруги из одного рода) и
-    // нельзя двигать уже сдвинутое кем-то другим дерево второй раз
-    if (!partnerRoot || partnerRoot === anchorRoot || alreadyMoved.has(partnerRoot)) continue;
+    // нельзя двигать дерево само на себя (супруги из одного рода)
+    if (!partnerRoot || !anchorRoot || partnerRoot === anchorRoot) continue;
     const anchorPos = positions[anchorId], partnerPos = positions[partnerId];
     if (!anchorPos || !partnerPos) continue;
 
-    const dx = (anchorPos.x + 1) - partnerPos.x;
-    const members = membersOf(partnerRoot);
-    if (wouldOverlap(members, dx)){
+    // Раньше всегда двигали именно "партнёра" — то есть чисто по тому,
+    // с какой стороны обход данных первым наткнулся на этот брак, а не по
+    // смыслу. Если у партнёра при этом была своя большая родословная (а у
+    // anchor'а — маленькая), пробовали протащить через полдерева огромную
+    // ветку — она почти гарантированно на что-то наталкивалась, и пара
+    // оставалась далеко друг от друга без всякой причины. Теперь пробуем
+    // подвинуть МЕНЬШЕЕ по числу людей дерево — не важно, чьё оно, anchor's
+    // или партнёра — так шанс не столкнуться ни с чем много выше; если не
+    // получилось, пробуем второе дерево как запасной вариант.
+    const partnerMembers = membersOf(partnerRoot);
+    const anchorMembers = membersOf(anchorRoot);
+    function tryMove(root, members, dx){
+      if (alreadyMoved.has(root)) return false;
+      if (wouldOverlap(members, dx)) return false;
+      moveUnit(members, dx);
+      alreadyMoved.add(root);
+      return true;
+    }
+    const movePartnerDx = (anchorPos.x + 1) - partnerPos.x;
+    const moveAnchorDx = (partnerPos.x - 1) - anchorPos.x;
+    const partnerFirst = partnerMembers.length <= anchorMembers.length;
+    const attached = partnerFirst
+      ? (tryMove(partnerRoot, partnerMembers, movePartnerDx) || tryMove(anchorRoot, anchorMembers, moveAnchorDx))
+      : (tryMove(anchorRoot, anchorMembers, moveAnchorDx) || tryMove(partnerRoot, partnerMembers, movePartnerDx));
+
+    if (!attached){
       fallbackConnectors.push({ a: anchorId, b: partnerId, pairX: anchorPos.x + 0.5 });
       continue;
     }
-    moveUnit(members, dx);
-    alreadyMoved.add(partnerRoot);
     block.spouseAttached = true;
     // сближение удалось — супруг(а) теперь буквально в соседнем слоте
     // (ровно как partnerFresh), поэтому рисуем ту же короткую линию брака.
@@ -944,11 +1012,15 @@ function computeConnectors(layout){
     const posA = layout.positions[e.parentAId];
     if (!posA) continue;
     // если второй родитель реально стоит рядом — центрируем по его
-    // настоящей позиции; если он размещён отдельно, центрируем по его
-    // зарезервированному пустому слоту рядом с ЭТИМ родителем — так дети
-    // остаются МЕЖДУ родителями, а не тянутся к далёкой позиции второго
+    // настоящей позиции; если сблизить не получилось, но его настоящая
+    // позиция всё равно известна — ствол горизонтальным крюком дотягивается
+    // до истинной середины между обоими родителями (а не до фиктивного
+    // зарезервированного слота рядом с anchor'ом): пусть дети физически
+    // и не могут стоять ровно на середине без наложений на остальное
+    // дерево, но линия честно показывает "это общие дети обоих", а не
+    // "дети только этого родителя"
     let posBx = null;
-    if (e.parentBAdjacent && e.parentBId && layout.positions[e.parentBId]){
+    if (e.parentBId && layout.positions[e.parentBId]){
       posBx = layout.positions[e.parentBId].x;
     } else if (e.hasCoupleSlot){
       posBx = coupleSlotByKey.get(e.parentAId + "~" + e.parentBId);
@@ -959,8 +1031,14 @@ function computeConnectors(layout){
     const kidPositions = e.childIds.map(cid => layout.positions[cid]).filter(Boolean);
     if (!kidPositions.length) continue;
     const kidXs = kidPositions.map(pos => px(pos.x));
-    addLine(midX, parentBottomY, midX, trunkY); // ствол вниз от родителей
-    const barMinX = Math.min(midX, ...kidXs), barMaxX = Math.max(midX, ...kidXs);
+    const anchorX = px(posA.x);
+    // ствол всегда спускается от НАСТОЯЩЕЙ карточки anchor'а (вертикально);
+    // если истинная середина с партнёром далеко в стороне — перекладина
+    // сама дотягивается до неё горизонтальным крюком (см. barMinX/barMaxX
+    // ниже), отдельная линия для этого не нужна — она бы просто наложилась
+    // на перекладину и задвоила отрезок
+    addLine(anchorX, parentBottomY, anchorX, trunkY);
+    const barMinX = Math.min(midX, anchorX, ...kidXs), barMaxX = Math.max(midX, anchorX, ...kidXs);
     addLine(barMinX, trunkY, barMaxX, trunkY); // перекладина
     for (const pos of kidPositions) addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth)); // спуск к каждому ребёнку
   }
