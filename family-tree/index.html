@@ -1304,7 +1304,12 @@ function computeConnectors(layout){
   function px(slotX){ return PAD + slotX * SLOT_W; }
   function py(depth){ return PAD + depth * ROW_H; }
   const segments = [];
-  const addLine = (x1, y1, x2, y2) => segments.push({ type: "line", x1, y1, x2, y2 });
+  // вырожденные отрезки (обе точки совпали) отбрасываем: в SVG это пустой
+  // элемент, который ничего не рисует, но засоряет схему и сбивает проверки
+  const addLine = (x1, y1, x2, y2) => {
+    if (Math.abs(x1 - x2) < 0.01 && Math.abs(y1 - y2) < 0.01) return;
+    segments.push({ type: "line", x1, y1, x2, y2 });
+  };
 
   // короткие линии браков — супруги стоят рядом. Рисуем строго ОТ КРАЯ до
   // КРАЯ карточек, а не от центра к центру: отрезок, уходящий внутрь
@@ -1391,9 +1396,17 @@ function computeConnectors(layout){
     const kidPositions = e.childIds.map(cid => layout.positions[cid]).filter(Boolean);
     if (!kidPositions.length) continue;
     const kidXs = kidPositions.map(pos => px(pos.x));
-    addLine(midX, parentBottomY, midX, trunkY);            // ствол вниз от родителей
-    verticals.push({ x: midX, y1: parentBottomY, y2: trunkY });
-    const barMinX = Math.min(midX, ...kidXs), barMaxX = Math.max(midX, ...kidXs);
+    // Ствол должен выходить ИЗ КАРТОЧКИ. По середине между родителями его
+    // можно опускать, только когда второй родитель действительно стоит
+    // рядом: тогда точка входа зажата между двумя карточками и читается как
+    // общая. Если же второй родитель далеко (или вместо него лишь
+    // зарезервированное пустое место), середина оказывается в пустоте — и
+    // ствол повисал в воздухе, начинаясь ни от чего. В этом случае опускаем
+    // его от карточки самого родителя, а до детей дотягивается перекладина.
+    const stemX = (e.parentBAdjacent && posBx != null) ? midX : px(posA.x);
+    addLine(stemX, parentBottomY, stemX, trunkY);          // ствол вниз от родителей
+    verticals.push({ x: stemX, y1: parentBottomY, y2: trunkY });
+    const barMinX = Math.min(stemX, ...kidXs), barMaxX = Math.max(stemX, ...kidXs);
     addLine(barMinX, trunkY, barMaxX, trunkY);             // перекладина
     for (const pos of kidPositions){
       addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth)); // спуск к каждому ребёнку
@@ -1414,7 +1427,12 @@ function computeConnectors(layout){
   // Любая длинная горизонталь в промежутке между рядами пересекает
   // вертикальные спуски чужих семей, попавшие в её пролёт. Перебираем
   // несколько допустимых высот и берём ту, где пересечений меньше всего.
-  const BAND_CHOICES = [96, 60, 30, 108];
+  // Высоты в междурядье, в порядке предпочтения. Промежуток между рядами —
+  // 116 px; вверху него (22 px) идут родовые перекладины, поэтому линия пары
+  // должна быть заметно ниже. При этом прижимать её к следующему ряду тоже
+  // нельзя: на 96 px до карточек оставалось всего 20 px, и линия читалась
+  // как приклеенная к ним. 60 px — примерно посередине свободной части.
+  const BAND_CHOICES = [60, 88, 38, 104];
   for (const e of bandedPairs){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     const ce = childEdgeByCouple.get(coupleKeyOf(e.a, e.b));
