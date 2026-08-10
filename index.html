@@ -516,6 +516,10 @@ function coParentGroups(personId){
 /* Раскладка древа (SVG)                                            */
 /* ---------------------------------------------------------------- */
 const SLOT_W = 260, NODE_W = 176, NODE_H = 74, ROW_H = 190, PAD = 20;
+/* На сколько ниже карточки идёт родовая перекладина "родители → дети".
+   Промежуток между рядами — ROW_H − NODE_H пикселей; перекладина в его
+   верхней части, линии далёких супругов — ниже (см. BAND_CHOICES). */
+const TRUNK_DROP = 22;
 
 /* Ряд (поколение) для каждого человека — согласование ЧЕТЫРЁХ правил сразу,
    до устойчивого состояния:
@@ -541,77 +545,207 @@ const SLOT_W = 260, NODE_W = 176, NODE_H = 74, ROW_H = 190, PAD = 20;
    уровне отдельных людей, поэтому такие «смешанные» случаи учитываются сами
    собой.
 
-   Все четыре правила только УВЕЛИЧИВАЮТ номер ряда и ограничены сверху
-   числом людей, поэтому цикл гарантированно сходится. */
+   Правила 2-4 применяются только там, где они НЕ ПРОТИВОРЕЧАТ кровному
+   родству, — см. ниже про несовместимые данные. При этом каждое правило
+   только УВЕЛИЧИВАЕТ номер ряда и ограничено сверху числом людей, поэтому
+   цикл гарантированно сходится.
+
+   Про несовместимые данные. Опечаткой легко получить связь, при которой
+   правила несовместимы в принципе: например, человек записан ОДНОВРЕМЕННО
+   отцом и супругом другого. Тогда «ребёнок ниже родителя» требует разных
+   рядов, а «супруги в одном ряду» — одинаковых, и наивный цикл наращивает
+   номера рядов до бесконечности: дерево уезжало на десятки тысяч пикселей
+   вниз, карточки наваливались друг на друга — вместо схемы получалась каша.
+   Поэтому кровное родство считается истиной: сначала отдельно считаем
+   глубину только по линии родитель → ребёнок, а из правил «супруги/братья в
+   одном ряду» выбрасываем те пары, где один приходится другому предком.
+   Отдельно выбрасываются рёбра, замыкающие круг (человек оказался
+   собственным предком) — иначе невыполнимо даже правило (1). */
 function computeRows(){
   const people = allPersons();
   const row = {};
   people.forEach(p => { row[p.id] = 0; });
+  if (!people.length) return row;
+
+  // ---- (0) кровные рёбра, из которых убраны замыкающие круг ----------
+  const parentsOf = new Map();
+  for (const p of people){
+    const ps = [];
+    for (const pid of [p.fatherId, p.motherId]){
+      if (pid && DB.persons[pid] && pid !== p.id) ps.push(pid);
+    }
+    parentsOf.set(p.id, ps);
+  }
+  const dropped = new Set(); // "ребёнок|родитель" — ребро, замыкающее круг
+  {
+    const state = new Map(); // 0/undefined — не тронут, 1 — в текущем пути, 2 — пройден
+    for (const start of people){
+      if (state.get(start.id)) continue;
+      // обход в глубину без рекурсии: на большом дереве рекурсия рискует
+      // упереться в предел стека
+      const stack = [{ id: start.id, i: 0 }];
+      state.set(start.id, 1);
+      while (stack.length){
+        const top = stack[stack.length - 1];
+        const par = (parentsOf.get(top.id) || [])[top.i++];
+        if (par === undefined){ state.set(top.id, 2); stack.pop(); continue; }
+        const st = state.get(par) || 0;
+        if (st === 1){ dropped.add(top.id + "|" + par); continue; } // круг
+        if (st === 0){ state.set(par, 1); stack.push({ id: par, i: 0 }); }
+      }
+    }
+  }
+  const bloodParents = id => (parentsOf.get(id) || []).filter(par => !dropped.has(id + "|" + par));
+
+  // ---- (1) базовая глубина — только по крови --------------------------
+  let changed = true;
+  let guard = people.length + 5;
+  while (changed && guard-- > 0){
+    changed = false;
+    for (const p of people){
+      for (const par of bloodParents(p.id)){
+        const need = row[par] + 1;
+        if (need > row[p.id]){ row[p.id] = need; changed = true; }
+      }
+    }
+  }
+
+  // ---- (2) отношение "предок" — чтобы отсеять противоречащие пары -----
+  const isAncestor = (anc, desc) => {
+    const seen = new Set([desc]);
+    const stack = [desc];
+    while (stack.length){
+      const cur = stack.pop();
+      for (const par of bloodParents(cur)){
+        if (par === anc) return true;
+        if (!seen.has(par)){ seen.add(par); stack.push(par); }
+      }
+    }
+    return false;
+  };
 
   // пары супругов — записанные и через spouseIds, и через общих детей
   const pairKeys = new Set();
   const pairs = [];
   function addPair(a, b){
-    if (!a || !b || a === b) return;
+    if (!a || !b || a === b || !DB.persons[a] || !DB.persons[b]) return;
     const key = [a, b].sort().join("~");
     if (pairKeys.has(key)) return;
     pairKeys.add(key);
+    if (isAncestor(a, b) || isAncestor(b, a)) return; // кровь важнее брака
     pairs.push([a, b]);
   }
   // дети каждого человека и группы родных братьев/сестёр
   const kidsOf = new Map();
   for (const p of people){
-    for (const sid of (p.spouseIds || [])){ if (DB.persons[sid]) addPair(p.id, sid); }
-    if (p.fatherId && p.motherId && DB.persons[p.fatherId] && DB.persons[p.motherId]) addPair(p.fatherId, p.motherId);
-    for (const pid of [p.fatherId, p.motherId]){
-      if (!pid || !DB.persons[pid]) continue;
-      if (!kidsOf.has(pid)) kidsOf.set(pid, []);
-      kidsOf.get(pid).push(p.id);
+    for (const sid of (p.spouseIds || [])) addPair(p.id, sid);
+    if (p.fatherId && p.motherId) addPair(p.fatherId, p.motherId);
+    for (const par of bloodParents(p.id)){
+      if (!kidsOf.has(par)) kidsOf.set(par, []);
+      kidsOf.get(par).push(p.id);
     }
   }
+  // группа братьев и сестёр выравнивается, только если внутри неё никто не
+  // приходится другому предком (тоже следствие опечатки в данных)
+  const sibGroups = [];
+  for (const [, kids] of kidsOf){
+    if (kids.length < 2) continue;
+    let ok = true;
+    for (let i = 0; i < kids.length && ok; i++){
+      for (let j = i + 1; j < kids.length; j++){
+        if (isAncestor(kids[i], kids[j]) || isAncestor(kids[j], kids[i])){ ok = false; break; }
+      }
+    }
+    if (ok) sibGroups.push(kids);
+  }
+  const spousesOf = new Map();
+  for (const [a, b] of pairs){
+    if (!spousesOf.has(a)) spousesOf.set(a, []);
+    if (!spousesOf.has(b)) spousesOf.set(b, []);
+    spousesOf.get(a).push(b);
+    spousesOf.get(b).push(a);
+  }
 
-  let changed = true;
-  let guard = people.length * 4 + 50;
+  // Правила 1-3 распространяются СТРОГО вниз по графу крови (а он после
+  // отбрасывания замыкающих рёбер ациклический), поэтому сами по себе они
+  // всегда сходятся. Правило 4, наоборот, тянет родителей ВНИЗ к детям — и
+  // вместе с правилом 1 через цепочку браков оно может замкнуться в петлю с
+  // постоянным ростом (родитель вниз → ребёнок вниз → его супруг вниз → его
+  // ребёнок вниз → ... → снова первый родитель). На нормальных данных этого
+  // не происходит, но одна опечатка способна такую петлю создать.
+  // Поэтому: считаем с уплотнением, а если оно НЕ сошлось — берём результат
+  // без уплотнения. Пусть лучше между поколениями останется лишний отступ,
+  // чем дерево уедет на десятки тысяч пикселей вниз грудой наложенных
+  // карточек.
+  function relax(useEquality, useCompaction){
+    const r = {};
+    for (const p of people) r[p.id] = 0;
+    let ch = true;
+    let g = people.length * (useCompaction ? 4 : 2) + 50;
+    while (ch && g-- > 0){
+      ch = false;
+      // (1) ребёнок ниже каждого родителя
+      for (const p of people){
+        for (const par of bloodParents(p.id)){
+          const need = r[par] + 1;
+          if (need > r[p.id]){ r[p.id] = need; ch = true; }
+        }
+      }
+      // (2) супруги в одном ряду
+      if (useEquality) for (const [a, b] of pairs){
+        const d = Math.max(r[a], r[b]);
+        if (r[a] !== d){ r[a] = d; ch = true; }
+        if (r[b] !== d){ r[b] = d; ch = true; }
+      }
+      // (3) родные братья и сёстры в одном ряду
+      if (useEquality) for (const kids of sibGroups){
+        let d = 0;
+        for (const k of kids) d = Math.max(d, r[k]);
+        for (const k of kids){ if (r[k] !== d){ r[k] = d; ch = true; } }
+      }
+      // (4) уплотнение: родитель вплотную над своим самым верхним ребёнком.
+      // Супругов двигаем вместе, иначе правило (2) тут же вернёт их назад и
+      // цикл будет топтаться на месте.
+      if (useCompaction){
+        for (const p of people){
+          const group = [p.id, ...(spousesOf.get(p.id) || [])];
+          let minKid = Infinity;
+          for (const gid of group){
+            for (const k of (kidsOf.get(gid) || [])) minKid = Math.min(minKid, r[k]);
+          }
+          if (minKid === Infinity) continue;
+          const target = minKid - 1;
+          for (const gid of group){
+            if (r[gid] < target){ r[gid] = target; ch = true; }
+          }
+        }
+      }
+    }
+    return { r, converged: !ch };
+  }
+  // Три уровня, от самого красивого к самому надёжному. Правило "супруги в
+  // одном ряду" тоже способно зациклиться в паре с правилом (1): цепочка
+  // "брак → ребёнок → брак → ребёнок" может замкнуться в круг, где каждый
+  // шаг требует ряда ниже предыдущего, и при этом ни одна пара не связана
+  // прямым родством (проверка выше такое не ловит). Последний уровень —
+  // только кровные связи: граф уже ациклический, поэтому он сходится всегда.
+  let res = relax(true, true);
+  if (!res.converged) res = relax(true, false);
+  if (!res.converged) res = relax(false, false);
+  for (const p of people) row[p.id] = res.r[p.id];
+
+  // ---- (5) последнее слово всегда за кровью ---------------------------
+  // если данные всё же оказались противоречивыми и цикл упёрся в
+  // предохранитель, ряды могли остаться несогласованными. Дожимаем правило
+  // "ребёнок ниже родителя" — пусть лучше будет пустой отступ, чем ребёнок
+  // на одной строке с родителем или выше него.
+  guard = people.length + 5;
+  changed = true;
   while (changed && guard-- > 0){
     changed = false;
-    // (1) ребёнок ниже каждого родителя
     for (const p of people){
-      for (const pid of [p.fatherId, p.motherId]){
-        if (!pid || !DB.persons[pid]) continue;
-        const need = row[pid] + 1;
-        if (need > row[p.id]){ row[p.id] = need; changed = true; }
-      }
-    }
-    // (2) супруги в одном ряду
-    for (const [a, b] of pairs){
-      const d = Math.max(row[a], row[b]);
-      if (row[a] !== d){ row[a] = d; changed = true; }
-      if (row[b] !== d){ row[b] = d; changed = true; }
-    }
-    // (3) родные братья и сёстры в одном ряду
-    for (const [, kids] of kidsOf){
-      if (kids.length < 2) continue;
-      let d = 0;
-      for (const k of kids) d = Math.max(d, row[k]);
-      for (const k of kids){ if (row[k] !== d){ row[k] = d; changed = true; } }
-    }
-    // (4) уплотнение: родитель вплотную над своим самым верхним ребёнком.
-    // Супругов двигаем вместе, иначе правило (2) тут же вернёт их назад и
-    // цикл будет топтаться на месте.
-    for (const p of people){
-      const group = new Set([p.id]);
-      for (const [a, b] of pairs){
-        if (a === p.id) group.add(b);
-        if (b === p.id) group.add(a);
-      }
-      let minKid = Infinity;
-      for (const gid of group){
-        for (const k of (kidsOf.get(gid) || [])) minKid = Math.min(minKid, row[k]);
-      }
-      if (minKid === Infinity) continue;
-      const target = minKid - 1;
-      for (const gid of group){
-        if (row[gid] < target){ row[gid] = target; changed = true; }
+      for (const par of bloodParents(p.id)){
+        if (row[p.id] <= row[par]){ row[p.id] = row[par] + 1; changed = true; }
       }
     }
   }
@@ -969,6 +1103,31 @@ function computeLayout(){
     }
   }
 
+  // Кто с кем уже стоит вплотную как пара (короткая линия брака). Карта
+  // пополняется по ходу сближений и служит защитой: ни один последующий
+  // сдвиг не имеет права растащить уже сведённую пару. Иначе «линия брака»
+  // растягивалась на несколько слотов и шла насквозь через чужие карточки.
+  const adjacentSpouses = new Map();
+  const marriedTo = id => adjacentSpouses.get(id) || [];
+  function noteAdjacent(a, b){
+    if (!adjacentSpouses.has(a)) adjacentSpouses.set(a, []);
+    if (!adjacentSpouses.has(b)) adjacentSpouses.set(b, []);
+    adjacentSpouses.get(a).push(b);
+    adjacentSpouses.get(b).push(a);
+  }
+  for (const e of marriageEdges) noteAdjacent(e.a, e.b);
+  // сдвиг набора людей ломает пару, если у кого-то из них супруг остаётся
+  // на месте (принадлежит другому, неперемещаемому дереву)
+  function wouldSplitCouple(memberIds){
+    const moving = new Set(memberIds);
+    for (const m of memberIds){
+      for (const other of marriedTo(m)){
+        if (positions[other] && !moving.has(other)) return true;
+      }
+    }
+    return false;
+  }
+
   const alreadyMoved = new Set();
   const fallbackConnectors = []; // {a,b,pairX} — сблизить не удалось: соединяем прямой веткой, координаты не трогаем
   for (const { block, anchorId, partnerId } of pendingSpouseLinks){
@@ -993,10 +1152,17 @@ function computeLayout(){
     function tryMove(root, members, dx){
       if (alreadyMoved.has(root)) return false;
       if (wouldOverlap(members, dx)) return false;
+      if (wouldSplitCouple(members)) return false; // не растаскиваем уже сведённых
       moveUnit(members, dx);
       alreadyMoved.add(root);
       return true;
     }
+    // Ставим супруга СПРАВА от партнёра. Пробовать вдобавок и левую сторону
+    // заманчиво (на случайных деревьях так удаётся свести больше пар), но
+    // проверено — выходит хуже: сближение срабатывает в неудобном месте, и
+    // на реальном дереве появляются пересечения линий, которых до этого не
+    // было. Лучше оставить пару разъехавшейся и соединить её аккуратной
+    // обходной линией, чем свести любой ценой.
     const movePartnerDx = (anchorPos.x + 1) - partnerPos.x;
     const moveAnchorDx = (partnerPos.x - 1) - anchorPos.x;
     const partnerFirst = partnerMembers.length <= anchorMembers.length;
@@ -1015,6 +1181,7 @@ function computeLayout(){
     // ветке anchor'а) вообще не имела бы никакой видимой связующей линии —
     // только совпадение в позиции, ничем не объяснимое на глаз.
     marriageEdges.push({ a: anchorId, b: partnerId });
+    noteAdjacent(anchorId, partnerId);
   }
 
   // ---- Шаг 4б: дети — МЕЖДУ далеко стоящими родителями -----------------
@@ -1041,8 +1208,31 @@ function computeLayout(){
     const dx = (posA.x + posB.x) / 2 - kidsCenter;
     if (Math.abs(dx) < 0.01) continue;
     if (wouldOverlap(kidMembers, dx)) continue;
+    // Нельзя двигать выводок, если кто-то из него уже стоит вплотную к
+    // своему супругу из ДРУГОГО рода: такой супруг в перемещаемый набор не
+    // входит (он принадлежит своему дереву), и сдвиг растащил бы уже
+    // сведённую пару. На экране это выглядело как «линия брака» длиной в
+    // несколько слотов, проходящая насквозь через чужие карточки.
+    if (wouldSplitCouple(kidMembers)) continue;
     moveUnit(kidMembers, dx);
     edge.kidsCentered = true;
+  }
+
+  // ---- Шаг 4в: короткая линия брака — только для реально соседних -------
+  // Короткая прямая линия уместна, лишь когда супруги стоят вплотную. Если
+  // между ними оказались чужие карточки, такая линия пройдёт прямо сквозь
+  // них. А стоять вплотную ко ВСЕМ супругам человек и не может: соседей у
+  // карточки максимум два, поэтому при повторном браке хотя бы одна пара
+  // неизбежно оказывается на расстоянии. Здесь проверяем итоговые
+  // координаты и переводим все «разъехавшиеся» пары в связи дальних
+  // супругов — те идут по междурядью и карточек не задевают.
+  for (let i = marriageEdges.length - 1; i >= 0; i--){
+    const e = marriageEdges[i];
+    const a = positions[e.a], b = positions[e.b];
+    const adjacent = a && b && a.depth === b.depth && Math.abs(a.x - b.x) <= 1.01;
+    if (adjacent) continue;
+    marriageEdges.splice(i, 1);
+    if (a && b) fallbackConnectors.push({ a: e.a, b: e.b });
   }
 
   // теперь, когда точно известно, кого удалось сблизить, проставляем
@@ -1082,15 +1272,22 @@ function computeLayout(){
   }
 
   // ---- Шаг 5: финализация -----------------------------------------
-  // сближение супругов могло сдвинуть часть дерева влево за 0 или вправо
-  // за исходную ширину — приводим координаты в неотрицательный диапазон
-  // и берём фактическую итоговую ширину холста
+  // Сближение супругов могло сдвинуть часть дерева влево за край холста.
+  // Выравниваем по КРАЮ КАРТОЧКИ, а не по её центру: карточка шире слота и
+  // торчит от центра на половину своей ширины в каждую сторону, поэтому
+  // человека, попавшего ровно в слот 0, обрезало левым краем холста —
+  // карточка начиналась на 68 пикселей левее нуля.
   const allX = Object.values(positions).map(p => p.x);
-  const minX = Math.min(0, ...allX);
-  if (minX < 0){
-    for (const id in positions) positions[id].x -= minX;
+  if (allX.length){
+    const minSlot = Math.min(...allX);
+    const minAllowed = (NODE_W / 2) / SLOT_W; // при нём левый край карточки = PAD
+    if (minSlot < minAllowed){
+      const dx = minAllowed - minSlot;
+      for (const id in positions) positions[id].x += dx;
+    }
   }
-  const width = Math.max(canvasCursor, ...Object.values(positions).map(p => p.x + 0.5));
+  const rightEdgeSlots = (NODE_W / 2) / SLOT_W; // столько же нужно справа
+  const width = Math.max(canvasCursor, ...Object.values(positions).map(p => p.x + rightEdgeSlots));
   const maxDepth = Math.max(0, ...Object.values(rowOf));
 
   return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges, width, maxDepth };
@@ -1125,77 +1322,126 @@ function computeConnectors(layout){
     addLine(ax, y, bx, y);
   }
 
-  // ---- связь далёких супругов: линия пары И ЕСТЬ перекладина их детей ----
-  // Супруги всегда в одном ряду, поэтому прямая между далёкими супругами —
-  // длинная горизонталь ровно на высоте карточек: она прошла бы НАСКВОЗЬ
-  // через чужие карточки, стоящие между ними в том же ряду. Поэтому ведём её
-  // по междурядью, ниже карточек.
-  //
-  // И главное: дети такой пары ВЕШАЮТСЯ ПРЯМО НА ЭТУ ЛИНИЮ, а не на
-  // отдельную перекладину под одним из родителей. Раньше отдельная
-  // перекладина шла своей высотой, и линия пары пересекала все спуски к
-  // детям — получалась решётка из пересечений, по которой невозможно было
-  // понять, чьи это дети. Теперь линия, соединяющая мать и отца, и есть та
-  // самая перекладина, от которой вниз идут их дети: пересечений нет, а
-  // принадлежность детей видна сразу — они висят на линии между родителями.
-  const SPOUSE_BAND = 85;
+  // ---- классифицируем связи разъехавшихся пар --------------------------
+  // Пара могла разъехаться по двум причинам: её не удалось свести вплотную,
+  // либо у человека несколько браков (соседей у карточки всего два, поэтому
+  // ко всем супругам вплотную встать невозможно). Связь ведём по-разному:
+  //   • если между супругами в их ряду НИКОГО нет — прямой линией на высоте
+  //     карточек, как у обычной пары: коротко, ничего не задевает;
+  //   • иначе — в обход по междурядью, и дети такой пары вешаются прямо на
+  //     эту линию (иначе линия пары шла бы своей высотой и пересекала все
+  //     спуски к детям, превращая схему в решётку).
   const coupleKeyOf = (a, b) => [a, b].sort().join("~");
   const childEdgeByCouple = new Map();
   for (const e of layout.childEdges){
     if (e.parentBId) childEdgeByCouple.set(coupleKeyOf(e.parentAId, e.parentBId), e);
   }
-  const drawnByConnector = new Set();
+  const rowOccupants = new Map();
+  for (const id in layout.positions){
+    const p = layout.positions[id];
+    if (!rowOccupants.has(p.depth)) rowOccupants.set(p.depth, []);
+    rowOccupants.get(p.depth).push({ id, x: p.x });
+  }
+  const directPairs = [], bandedPairs = [];
   for (const e of layout.fallbackConnectors){
     const a = layout.positions[e.a], b = layout.positions[e.b];
-    if (!a || !b) continue;
+    if (!a || !b || e.a === e.b) continue;
+    const lo = Math.min(a.x, b.x), hi = Math.max(a.x, b.x);
+    const clearRow = a.depth === b.depth && hi - lo > 0.01 &&
+      !(rowOccupants.get(a.depth) || []).some(o =>
+        o.id !== e.a && o.id !== e.b && o.x > lo + 0.01 && o.x < hi - 0.01);
+    (clearRow ? directPairs : bandedPairs).push(e);
+  }
+  const directCouples = new Set(directPairs.map(e => coupleKeyOf(e.a, e.b)));
+  const handledByConnector = new Set(); // дети подвешиваются к линии пары
+  for (const e of bandedPairs){
     const ce = childEdgeByCouple.get(coupleKeyOf(e.a, e.b));
-    const kidPositions = ce ? ce.childIds.map(id => layout.positions[id]).filter(Boolean) : [];
-    const kidXs = kidPositions.map(p => px(p.x));
-    const ax = px(a.x), bx = px(b.x);
-    const bandY = Math.max(py(a.depth), py(b.depth)) + NODE_H + SPOUSE_BAND;
-    addLine(ax, py(a.depth) + NODE_H, ax, bandY);          // спуск от одного супруга
-    addLine(bx, py(b.depth) + NODE_H, bx, bandY);          // спуск от другого
-    const leftX = Math.min(ax, bx, ...kidXs), rightX = Math.max(ax, bx, ...kidXs);
-    addLine(leftX, bandY, rightX, bandY);                  // общая перекладина пары
-    for (const p of kidPositions) addLine(px(p.x), bandY, px(p.x), py(p.depth)); // дети висят на ней
-    if (ce) drawnByConnector.add(ce);
+    if (ce) handledByConnector.add(ce);
   }
 
-  // родовые стволы родитель(и) → дети
+  // ---- родовые стволы: они же задают "занятые" вертикали ----------------
+  // Порядок важен: высоту обходной линии выбираем так, чтобы она пересекла
+  // как можно меньше вертикалей, — а для этого их нужно знать заранее.
+  const verticals = []; // {x, y1, y2} — препятствия для горизонтальных линий
   const coupleSlotByKey = new Map();
   for (const cs of layout.coupleSlots) coupleSlotByKey.set(cs.anchorId + "~" + cs.partnerId, cs.x);
   for (const e of layout.childEdges){
-    if (drawnByConnector.has(e)) continue; // уже нарисованы как дети далёкой пары
+    if (handledByConnector.has(e)) continue; // нарисуем вместе с линией пары
     const posA = layout.positions[e.parentAId];
     if (!posA) continue;
     // Второй родитель стоит рядом — центрируем ствол между настоящими
-    // карточками обоих. Если он размещён далеко (сблизить не удалось) —
-    // центрируем по его ЗАРЕЗЕРВИРОВАННОМУ пустому слоту рядом с этим
-    // родителем, а НЕ по его далёкой настоящей позиции: тянуть перекладину
-    // через полхолста к далёкому супругу — это длинная горизонтальная
-    // линия поперёк всего дерева, идущая ровно там же, где и линия брака,
-    // то есть ровно та "лишняя линия", которая мешала читать схему. Связь
-    // с далёким супругом показывает одна отдельная диагональ (ниже).
+    // карточками обоих. Если он размещён далеко, центрируем по его
+    // ЗАРЕЗЕРВИРОВАННОМУ пустому слоту рядом с этим родителем, а НЕ по его
+    // далёкой настоящей позиции: тянуть перекладину через полхолста — это
+    // длинная горизонталь поперёк всего дерева.
+    const isDirect = e.parentBId && directCouples.has(coupleKeyOf(e.parentAId, e.parentBId));
     let posBx = null;
-    if (e.parentBAdjacent && e.parentBId && layout.positions[e.parentBId]){
-      posBx = layout.positions[e.parentBId].x;
-    } else if (e.kidsCentered && e.parentBId && layout.positions[e.parentBId]){
-      // детей физически передвинули на середину между далёкими родителями
-      // (шаг 4б) — значит и ствол честно идёт из этой самой середины
+    if (e.parentBId && layout.positions[e.parentBId] &&
+        (e.parentBAdjacent || e.kidsCentered || isDirect)){
+      // родители реально рядом, либо детей физически передвинули на середину
+      // между ними (шаг 4б), либо между супругами пусто и связь прямая —
+      // во всех трёх случаях середина берётся по настоящим позициям
       posBx = layout.positions[e.parentBId].x;
     } else if (e.hasCoupleSlot){
       posBx = coupleSlotByKey.get(e.parentAId + "~" + e.parentBId);
     }
     const midX = (posBx != null) ? (px(posA.x) + px(posBx)) / 2 : px(posA.x);
     const parentBottomY = py(posA.depth) + NODE_H;
-    const trunkY = parentBottomY + 22;
+    const trunkY = parentBottomY + TRUNK_DROP;
     const kidPositions = e.childIds.map(cid => layout.positions[cid]).filter(Boolean);
     if (!kidPositions.length) continue;
     const kidXs = kidPositions.map(pos => px(pos.x));
-    addLine(midX, parentBottomY, midX, trunkY); // ствол вниз от родителей
+    addLine(midX, parentBottomY, midX, trunkY);            // ствол вниз от родителей
+    verticals.push({ x: midX, y1: parentBottomY, y2: trunkY });
     const barMinX = Math.min(midX, ...kidXs), barMaxX = Math.max(midX, ...kidXs);
-    addLine(barMinX, trunkY, barMaxX, trunkY); // перекладина
-    for (const pos of kidPositions) addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth)); // спуск к каждому ребёнку
+    addLine(barMinX, trunkY, barMaxX, trunkY);             // перекладина
+    for (const pos of kidPositions){
+      addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth)); // спуск к каждому ребёнку
+      verticals.push({ x: px(pos.x), y1: trunkY, y2: py(pos.depth) });
+    }
+  }
+
+  // ---- прямые связи: между супругами в ряду никого нет -------------------
+  for (const e of directPairs){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    const y = py(a.depth) + NODE_H / 2;
+    const goingRight = b.x >= a.x;
+    addLine(px(a.x) + (goingRight ? NODE_W/2 : -NODE_W/2), y,
+            px(b.x) + (goingRight ? -NODE_W/2 : NODE_W/2), y);
+  }
+
+  // ---- обходные связи: линия пары И ЕСТЬ перекладина её детей ------------
+  // Любая длинная горизонталь в промежутке между рядами пересекает
+  // вертикальные спуски чужих семей, попавшие в её пролёт. Перебираем
+  // несколько допустимых высот и берём ту, где пересечений меньше всего.
+  const BAND_CHOICES = [96, 60, 30, 108];
+  for (const e of bandedPairs){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    const ce = childEdgeByCouple.get(coupleKeyOf(e.a, e.b));
+    const kidPositions = ce ? ce.childIds.map(id => layout.positions[id]).filter(Boolean) : [];
+    const kidXs = kidPositions.map(p => px(p.x));
+    const ax = px(a.x), bx = px(b.x);
+    const baseY = Math.max(py(a.depth), py(b.depth)) + NODE_H;
+    const leftX = Math.min(ax, bx, ...kidXs), rightX = Math.max(ax, bx, ...kidXs);
+    let bandY = baseY + BAND_CHOICES[0], best = Infinity;
+    for (const off of BAND_CHOICES){
+      const y = baseY + off;
+      let hits = 0;
+      for (const v of verticals){
+        if (v.x > leftX + 1 && v.x < rightX - 1 && y > Math.min(v.y1,v.y2) + 1 && y < Math.max(v.y1,v.y2) - 1) hits++;
+      }
+      if (hits < best){ best = hits; bandY = y; }
+      if (!hits) break;
+    }
+    addLine(ax, py(a.depth) + NODE_H, ax, bandY);          // спуск от одного супруга
+    addLine(bx, py(b.depth) + NODE_H, bx, bandY);          // спуск от другого
+    addLine(leftX, bandY, rightX, bandY);                  // общая перекладина пары
+    verticals.push({ x: ax, y1: py(a.depth) + NODE_H, y2: bandY });
+    verticals.push({ x: bx, y1: py(b.depth) + NODE_H, y2: bandY });
+    for (const p of kidPositions){
+      addLine(px(p.x), bandY, px(p.x), py(p.depth));       // дети висят на ней
+      verticals.push({ x: px(p.x), y1: bandY, y2: py(p.depth) });
+    }
   }
 
   return segments;
