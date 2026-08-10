@@ -866,6 +866,34 @@ function computeLayout(){
     delete e.block;
   }
 
+  // Подстраховка: обходы выше находят супругов через coParentGroups() —
+  // группировку по ОБЩИМ детям и по spouseIds. Если брак записан не с
+  // обеих сторон (например, spouseIds проставлен только у одного из
+  // супругов, а у общих детей заполнено поле только одного родителя),
+  // такая пара могла ни разу не встретиться обходу — и тогда партнёр
+  // повисал на дереве вообще БЕЗ единой связующей линии, как будто он
+  // сам по себе. Здесь перебираем ВСЕ браки ещё раз, любым способом
+  // записанные в данных, и для каждого, у кого до сих пор нет ни короткой
+  // линии, ни ветки, — добавляем прямую ветку между их настоящими
+  // позициями. Иначе ни один супруг не должен остаться без связи.
+  const linkedPairs = new Set();
+  for (const e of marriageEdges) linkedPairs.add(coupleKey(e.a, e.b));
+  for (const e of fallbackConnectors) linkedPairs.add(coupleKey(e.a, e.b));
+  const allRecordedPairs = new Set();
+  for (const p of allPersons()){
+    for (const sid of (p.spouseIds || [])){ if (P(sid)) allRecordedPairs.add(coupleKey(p.id, sid)); }
+  }
+  for (const c of allPersons()){
+    if (c.fatherId && c.motherId && P(c.fatherId) && P(c.motherId)) allRecordedPairs.add(coupleKey(c.fatherId, c.motherId));
+  }
+  for (const key of allRecordedPairs){
+    if (linkedPairs.has(key)) continue;
+    const [aId, bId] = key.split("~");
+    if (!positions[aId] || !positions[bId]) continue;
+    fallbackConnectors.push({ a: aId, b: bId });
+    linkedPairs.add(key);
+  }
+
   // ---- Шаг 5: финализация -----------------------------------------
   // сближение супругов могло сдвинуть часть дерева влево за 0 или вправо
   // за исходную ширину — приводим координаты в неотрицательный диапазон
@@ -936,13 +964,22 @@ function computeConnectors(layout){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     if (!a || !b) continue;
     // начало ветки — та же точка (pairX), где уже центрируются общие
-    // дети, но сдвинутая чуть в сторону и нырнувшая ГЛУБЖЕ, чем стволовая
-    // перекладина к детям — иначе обе линии сливаются в точке касания и
-    // на глаз читаются как одна кривая петля, а не как две разные линии
-    const ax = px(e.pairX != null ? e.pairX : a.x) + 16, bx = px(b.x);
-    const bottomY = py(a.depth) + NODE_H;
+    // дети, но сдвинутая чуть в сторону, чтобы не сливаться со стволом к
+    // детям в точке выхода. Вход в карточку супруга — СБОКУ (левый или
+    // правый край, по высоте центра карточки), а не снизу по центру: вход
+    // снизу по центру визуально неотличим от ствола "родитель → дети" и
+    // на глаз читается как одна и та же линия, проходящая насквозь через
+    // карточку, а не как отдельная связь супругов. Ныряем ниже НИЖНЕГО из
+    // двух рядов (на случай редкого рассинхрона глубин) — иначе ветка
+    // прошла бы прямо через чужие карточки на строке между а и b.
+    const startX = e.pairX != null ? e.pairX : a.x;
+    const ax = px(startX) + 16;
+    const goingRight = b.x >= startX;
+    const bEdgeX = goingRight ? px(b.x) - NODE_W / 2 : px(b.x) + NODE_W / 2;
+    const bottomY = Math.max(py(a.depth), py(b.depth)) + NODE_H;
     const dipY = bottomY + 34;
-    addElbow([[ax, bottomY], [ax, dipY], [bx, dipY], [bx, bottomY]]);
+    const sideY = py(b.depth) + NODE_H / 2;
+    addElbow([[ax, py(a.depth) + NODE_H], [ax, dipY], [bEdgeX, dipY], [bEdgeX, sideY]]);
   }
 
   return segments;
