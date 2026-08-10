@@ -1108,7 +1108,6 @@ function computeConnectors(layout){
   function py(depth){ return PAD + depth * ROW_H; }
   const segments = [];
   const addLine = (x1, y1, x2, y2) => segments.push({ type: "line", x1, y1, x2, y2 });
-  const addElbow = points => segments.push({ type: "path", points });
 
   // короткие линии браков — супруги стоят рядом. Рисуем строго ОТ КРАЯ до
   // КРАЯ карточек, а не от центра к центру: отрезок, уходящий внутрь
@@ -1126,10 +1125,47 @@ function computeConnectors(layout){
     addLine(ax, y, bx, y);
   }
 
+  // ---- связь далёких супругов: линия пары И ЕСТЬ перекладина их детей ----
+  // Супруги всегда в одном ряду, поэтому прямая между далёкими супругами —
+  // длинная горизонталь ровно на высоте карточек: она прошла бы НАСКВОЗЬ
+  // через чужие карточки, стоящие между ними в том же ряду. Поэтому ведём её
+  // по междурядью, ниже карточек.
+  //
+  // И главное: дети такой пары ВЕШАЮТСЯ ПРЯМО НА ЭТУ ЛИНИЮ, а не на
+  // отдельную перекладину под одним из родителей. Раньше отдельная
+  // перекладина шла своей высотой, и линия пары пересекала все спуски к
+  // детям — получалась решётка из пересечений, по которой невозможно было
+  // понять, чьи это дети. Теперь линия, соединяющая мать и отца, и есть та
+  // самая перекладина, от которой вниз идут их дети: пересечений нет, а
+  // принадлежность детей видна сразу — они висят на линии между родителями.
+  const SPOUSE_BAND = 85;
+  const coupleKeyOf = (a, b) => [a, b].sort().join("~");
+  const childEdgeByCouple = new Map();
+  for (const e of layout.childEdges){
+    if (e.parentBId) childEdgeByCouple.set(coupleKeyOf(e.parentAId, e.parentBId), e);
+  }
+  const drawnByConnector = new Set();
+  for (const e of layout.fallbackConnectors){
+    const a = layout.positions[e.a], b = layout.positions[e.b];
+    if (!a || !b) continue;
+    const ce = childEdgeByCouple.get(coupleKeyOf(e.a, e.b));
+    const kidPositions = ce ? ce.childIds.map(id => layout.positions[id]).filter(Boolean) : [];
+    const kidXs = kidPositions.map(p => px(p.x));
+    const ax = px(a.x), bx = px(b.x);
+    const bandY = Math.max(py(a.depth), py(b.depth)) + NODE_H + SPOUSE_BAND;
+    addLine(ax, py(a.depth) + NODE_H, ax, bandY);          // спуск от одного супруга
+    addLine(bx, py(b.depth) + NODE_H, bx, bandY);          // спуск от другого
+    const leftX = Math.min(ax, bx, ...kidXs), rightX = Math.max(ax, bx, ...kidXs);
+    addLine(leftX, bandY, rightX, bandY);                  // общая перекладина пары
+    for (const p of kidPositions) addLine(px(p.x), bandY, px(p.x), py(p.depth)); // дети висят на ней
+    if (ce) drawnByConnector.add(ce);
+  }
+
   // родовые стволы родитель(и) → дети
   const coupleSlotByKey = new Map();
   for (const cs of layout.coupleSlots) coupleSlotByKey.set(cs.anchorId + "~" + cs.partnerId, cs.x);
   for (const e of layout.childEdges){
+    if (drawnByConnector.has(e)) continue; // уже нарисованы как дети далёкой пары
     const posA = layout.positions[e.parentAId];
     if (!posA) continue;
     // Второй родитель стоит рядом — центрируем ствол между настоящими
@@ -1160,34 +1196,6 @@ function computeConnectors(layout){
     const barMinX = Math.min(midX, ...kidXs), barMaxX = Math.max(midX, ...kidXs);
     addLine(barMinX, trunkY, barMaxX, trunkY); // перекладина
     for (const pos of kidPositions) addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth)); // спуск к каждому ребёнку
-  }
-
-  // Связь с супругом, которого не удалось поставить рядом. Супруги всегда
-  // в ОДНОМ ряду, поэтому прямая между ними — это длинная горизонталь ровно
-  // на высоте карточек: она пройдёт НАСКВОЗЬ через все чужие карточки,
-  // оказавшиеся между ними в этом же ряду. Поэтому ведём линию по нижней
-  // части междурядья — там пусто.
-  //
-  // Промежуток между рядами делим на две чёткие полосы, чтобы связи разных
-  // видов нигде не сливались в одну линию:
-  //   • верх промежутка (+22)  — родовые перекладины "родители → дети";
-  //   • низ промежутка (+85)   — связи далёких супругов.
-  // Вертикальные спуски к детям пересекают нижнюю полосу под прямым углом —
-  // это обычное пересечение линий, читается однозначно, в отличие от
-  // слияния двух линий на общем отрезке.
-  const SPOUSE_BAND = 85;
-  // выход/вход — у нижнего края карточки, но СМЕЩЁННЫЙ от центра: ровно из
-  // центра вниз уже уходит ствол к детям, и общий отрезок двух линий читался
-  // бы как одна ветка
-  const SIDE_OFF = NODE_W / 2 - 20;
-  for (const e of layout.fallbackConnectors){
-    const a = layout.positions[e.a], b = layout.positions[e.b];
-    if (!a || !b) continue;
-    const goingRight = b.x >= a.x;
-    const ax = px(a.x) + (goingRight ? SIDE_OFF : -SIDE_OFF);
-    const bx = px(b.x) + (goingRight ? -SIDE_OFF : SIDE_OFF);
-    const bandY = Math.max(py(a.depth), py(b.depth)) + NODE_H + SPOUSE_BAND;
-    addElbow([[ax, py(a.depth) + NODE_H], [ax, bandY], [bx, bandY], [bx, py(b.depth) + NODE_H]]);
   }
 
   return segments;
