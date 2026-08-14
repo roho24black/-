@@ -50,6 +50,14 @@
   --clan-10:#8a4a4a;
   --clan-11:#2f6a6a;
   --clan-12:#6b5a2f;
+  --clan-13:#7a3f5a;
+  --clan-14:#456b8a;
+  --clan-15:#6b7a3a;
+  --clan-16:#8a6a5a;
+  --clan-17:#4a5a6b;
+  --clan-18:#7a5a8a;
+  --clan-19:#3a6b5f;
+  --clan-20:#8a7a3f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -82,6 +90,14 @@
     --clan-10:#d68a8a;
     --clan-11:#6fb8b8;
     --clan-12:#bda87a;
+    --clan-13:#d68ab0;
+    --clan-14:#8fb0d6;
+    --clan-15:#b6c47a;
+    --clan-16:#d6b0a0;
+    --clan-17:#9ab0c4;
+    --clan-18:#c4a0d6;
+    --clan-19:#7ac4ad;
+    --clan-20:#d6c489;
   }
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -1345,20 +1361,56 @@ function computeLayout(){
     const donors = [...(p.spouseIds || []), p.fatherId, p.motherId];
     for (const d of donors){ if (d && keyOfPerson[d]){ keyOfPerson[p.id] = keyOfPerson[d]; break; } }
   }
+  // Цвет получает только тот род, который реально окрашивает хотя бы одну
+  // линию. Линия семьи берёт фамилию мужа, поэтому жена, оставившая
+  // девичью фамилию, своей линии не даёт — а раньше её фамилия всё равно
+  // занимала место в палитре. Из-за этих «пустых» родов настоящим родам
+  // доставались повторяющиеся цвета (Самедовы совпадали с Еремиными,
+  // Аскаровы — с Башмак-Фаткулиными). Теперь пустые рода цветов не тратят.
+  const familyKeyOf = (aId, bId) => {
+    const A = aId ? P(aId) : null, B = bId ? P(bId) : null;
+    if (A && A.gender === "M" && keyOfPerson[aId]) return keyOfPerson[aId];
+    if (B && B.gender === "M" && keyOfPerson[bId]) return keyOfPerson[bId];
+    return keyOfPerson[aId] || keyOfPerson[bId] || "";
+  };
+  const usedKeys = new Set();
+  for (const e of marriageEdges) usedKeys.add(familyKeyOf(e.a, e.b));
+  for (const e of fallbackConnectors) usedKeys.add(familyKeyOf(e.a, e.b));
+  for (const e of childEdges) usedKeys.add(familyKeyOf(e.parentAId, e.parentBId));
+
   // Порядок цветов — слева направо по холсту: соседние на экране рода
   // получают соседние (то есть разные) цвета палитры.
   const firstX = new Map();
   for (const p of allPersons()){
     const k = keyOfPerson[p.id] || "";
+    if (!usedKeys.has(k)) continue;
     const pos = positions[p.id];
     if (!pos) continue;
     if (!firstX.has(k) || pos.x < firstX.get(k)) firstX.set(k, pos.x);
   }
+  for (const k of usedKeys){ if (!firstX.has(k)) firstX.set(k, Infinity); }
   const orderedKeys = Array.from(firstX.keys()).sort((a, b) => firstX.get(a) - firstX.get(b));
   const indexOfKey = new Map();
   orderedKeys.forEach((k, i) => indexOfKey.set(k, i));
+  // Человеку из «пустого» рода (жена с девичьей фамилией) цвет достаётся от
+  // семьи, в которую он входит, — от супруга или от отца.
   const clanOf = {};
-  for (const p of allPersons()) clanOf[p.id] = indexOfKey.get(keyOfPerson[p.id] || "") || 0;
+  for (const p of allPersons()){
+    const own = keyOfPerson[p.id] || "";
+    if (indexOfKey.has(own)){ clanOf[p.id] = indexOfKey.get(own); continue; }
+    let idx = null;
+    for (const sid of (p.spouseIds || [])){
+      const k = keyOfPerson[sid];
+      if (k && indexOfKey.has(k)){ idx = indexOfKey.get(k); break; }
+    }
+    if (idx == null){
+      for (const pid of [p.fatherId, p.motherId]){
+        const k = pid && keyOfPerson[pid];
+        if (k && indexOfKey.has(k)){ idx = indexOfKey.get(k); break; }
+      }
+    }
+    clanOf[p.id] = idx == null ? 0 : idx;
+  }
 
   return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges, width, maxDepth, clanOf };
 }
@@ -1599,7 +1651,7 @@ function computeConnectors(layout){
 /* Цвет линии по номеру рода. Родов может быть больше, чем цветов в
    палитре, поэтому номера идут по кругу — соседние рода при этом всё равно
    получают разные цвета, так как выкладываются подряд. */
-const CLAN_COLOR_COUNT = 12;
+const CLAN_COLOR_COUNT = 20;
 function clanStroke(clan){
   return "var(--clan-" + ((((clan | 0) % CLAN_COLOR_COUNT) + CLAN_COLOR_COUNT) % CLAN_COLOR_COUNT + 1) + ")";
 }
@@ -2450,7 +2502,8 @@ async function exportTreeAsImage(){
   // страницы со стилями. Поэтому цвета родов подставляем готовыми
   // значениями, вычисленными из текущей темы.
   const clanFallback = ["#8a6a3a","#3f6f7a","#7a4a63","#5c6b3a","#6a4a8a","#8a5540","#3f6b52","#7a6a2f",
-                        "#5a5f8a","#8a4a4a","#2f6a6a","#6b5a2f"];
+                        "#5a5f8a","#8a4a4a","#2f6a6a","#6b5a2f","#7a3f5a","#456b8a","#6b7a3a","#8a6a5a",
+                        "#4a5a6b","#7a5a8a","#3a6b5f","#8a7a3f"];
   const clanColors = clanFallback.map((def, i) => cssVar("--clan-" + (i+1), def));
   colors.clan = (clan) => clanColors[((((clan | 0) % clanColors.length) + clanColors.length) % clanColors.length)];
 
