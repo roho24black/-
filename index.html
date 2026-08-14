@@ -33,6 +33,19 @@
   --ok:#3f7a4e;
   --shadow:rgba(60,45,20,.16);
   --radius:14px;
+  /* Цвета линий по родам. Каждая независимая родословная получает свой
+     цвет, поэтому в местах, где ветви разных родов идут рядом или
+     пересекаются, видно, какая линия чья, и они не сливаются в кашу.
+     Оттенки подобраны так, чтобы различаться и не спорить с цветами
+     карточек (синие — мужчины, розовые — женщины). */
+  --clan-1:#8a6a3a;
+  --clan-2:#3f6f7a;
+  --clan-3:#7a4a63;
+  --clan-4:#5c6b3a;
+  --clan-5:#6a4a8a;
+  --clan-6:#8a5540;
+  --clan-7:#3f6b52;
+  --clan-8:#7a6a2f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -52,6 +65,15 @@
     --unknown-bg:#2c2820;
     --line:#5a513e;
     --shadow:rgba(0,0,0,.45);
+    /* на тёмном фоне те же рода, но светлее — иначе линии тонут в фоне */
+    --clan-1:#c9a26a;
+    --clan-2:#6fb0c2;
+    --clan-3:#c98aa8;
+    --clan-4:#9fb56a;
+    --clan-5:#a98ad0;
+    --clan-6:#d69479;
+    --clan-7:#6fbb94;
+    --clan-8:#c4b268;
   }
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -1290,7 +1312,24 @@ function computeLayout(){
   const width = Math.max(canvasCursor, ...Object.values(positions).map(p => p.x + rightEdgeSlots));
   const maxDepth = Math.max(0, ...Object.values(rowOf));
 
-  return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges, width, maxDepth };
+  // Номер рода для каждого человека — по тому корневому юниту леса, к
+  // которому он относится. По нему линиям назначается цвет, чтобы ветви
+  // разных родословных не сливались друг с другом. Пришедшие в семью
+  // супруги (partnerElsewhere) в rootOf не попадают — им род назначаем по
+  // собственной родословной, если она есть, иначе по мужу/жене.
+  const clanOf = {};
+  forest.forEach((u, i) => { for (const id of membersOf(u)) clanOf[id] = i; });
+  for (const p of allPersons()){
+    if (clanOf[p.id] != null) continue;
+    const own = rootOf.get(p.id);
+    if (own){ clanOf[p.id] = forest.indexOf(own); continue; }
+    for (const sid of (p.spouseIds || [])){
+      if (clanOf[sid] != null){ clanOf[p.id] = clanOf[sid]; break; }
+    }
+    if (clanOf[p.id] == null) clanOf[p.id] = 0;
+  }
+
+  return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges, width, maxDepth, clanOf };
 }
 
 /* Строит единый список отрезков для отрисовки связей — родовые стволы,
@@ -1306,9 +1345,12 @@ function computeConnectors(layout){
   const segments = [];
   // вырожденные отрезки (обе точки совпали) отбрасываем: в SVG это пустой
   // элемент, который ничего не рисует, но засоряет схему и сбивает проверки
-  const addLine = (x1, y1, x2, y2) => {
+  const clanOf = layout.clanOf || {};
+  // caждый отрезок помечается номером рода — по нему при отрисовке
+  // выбирается цвет, чтобы ветви разных родословных не сливались
+  const addLine = (x1, y1, x2, y2, clan) => {
     if (Math.abs(x1 - x2) < 0.01 && Math.abs(y1 - y2) < 0.01) return;
-    segments.push({ type: "line", x1, y1, x2, y2 });
+    segments.push({ type: "line", x1, y1, x2, y2, clan: clan || 0 });
   };
 
   // короткие линии браков — супруги стоят рядом. Рисуем строго ОТ КРАЯ до
@@ -1324,7 +1366,7 @@ function computeConnectors(layout){
     const goingRight = b.x >= a.x;
     const ax = px(a.x) + (goingRight ? NODE_W / 2 : -NODE_W / 2);
     const bx = px(b.x) + (goingRight ? -NODE_W / 2 : NODE_W / 2);
-    addLine(ax, y, bx, y);
+    addLine(ax, y, bx, y, clanOf[e.a]);
   }
 
   // ---- классифицируем связи разъехавшихся пар --------------------------
@@ -1404,12 +1446,13 @@ function computeConnectors(layout){
     // ствол повисал в воздухе, начинаясь ни от чего. В этом случае опускаем
     // его от карточки самого родителя, а до детей дотягивается перекладина.
     const stemX = (e.parentBAdjacent && posBx != null) ? midX : px(posA.x);
-    addLine(stemX, parentBottomY, stemX, trunkY);          // ствол вниз от родителей
+    const clan = clanOf[e.parentAId];
+    addLine(stemX, parentBottomY, stemX, trunkY, clan);    // ствол вниз от родителей
     verticals.push({ x: stemX, y1: parentBottomY, y2: trunkY });
     const barMinX = Math.min(stemX, ...kidXs), barMaxX = Math.max(stemX, ...kidXs);
-    addLine(barMinX, trunkY, barMaxX, trunkY);             // перекладина
+    addLine(barMinX, trunkY, barMaxX, trunkY, clan);       // перекладина
     for (const pos of kidPositions){
-      addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth)); // спуск к каждому ребёнку
+      addLine(px(pos.x), trunkY, px(pos.x), py(pos.depth), clan); // спуск к каждому ребёнку
       verticals.push({ x: px(pos.x), y1: trunkY, y2: py(pos.depth) });
     }
   }
@@ -1420,7 +1463,7 @@ function computeConnectors(layout){
     const y = py(a.depth) + NODE_H / 2;
     const goingRight = b.x >= a.x;
     addLine(px(a.x) + (goingRight ? NODE_W/2 : -NODE_W/2), y,
-            px(b.x) + (goingRight ? -NODE_W/2 : NODE_W/2), y);
+            px(b.x) + (goingRight ? -NODE_W/2 : NODE_W/2), y, clanOf[e.a]);
   }
 
   // ---- обходные связи: линия пары И ЕСТЬ перекладина её детей ------------
@@ -1432,7 +1475,8 @@ function computeConnectors(layout){
   // должна быть заметно ниже. При этом прижимать её к следующему ряду тоже
   // нельзя: на 96 px до карточек оставалось всего 20 px, и линия читалась
   // как приклеенная к ним. 60 px — примерно посередине свободной части.
-  const BAND_CHOICES = [60, 88, 38, 104];
+  const BAND_CHOICES = [60, 88, 38, 104, 46, 72, 96, 30];
+  const placedBands = []; // {y, x1, x2} — уже занятые горизонтали в междурядье
   for (const e of bandedPairs){
     const a = layout.positions[e.a], b = layout.positions[e.b];
     const ce = childEdgeByCouple.get(coupleKeyOf(e.a, e.b));
@@ -1441,28 +1485,80 @@ function computeConnectors(layout){
     const ax = px(a.x), bx = px(b.x);
     const baseY = Math.max(py(a.depth), py(b.depth)) + NODE_H;
     const leftX = Math.min(ax, bx, ...kidXs), rightX = Math.max(ax, bx, ...kidXs);
+    // Высоту подбираем так, чтобы линия, во-первых, НЕ ЛЕГЛА НА ДРУГУЮ такую
+    // же (две пары, попавшие на одну высоту, рисовались буквально одна
+    // поверх другой — на экране это выглядело как одна линия, ведущая сразу
+    // ко всем, и разобрать, кто с кем, было невозможно), и во-вторых —
+    // пересекала как можно меньше вертикальных спусков чужих семей.
+    // Наложение штрафуем несравнимо сильнее пересечения: пересечение
+    // читается, слияние — нет.
     let bandY = baseY + BAND_CHOICES[0], best = Infinity;
     for (const off of BAND_CHOICES){
       const y = baseY + off;
-      let hits = 0;
-      for (const v of verticals){
-        if (v.x > leftX + 1 && v.x < rightX - 1 && y > Math.min(v.y1,v.y2) + 1 && y < Math.max(v.y1,v.y2) - 1) hits++;
+      let penalty = 0;
+      for (const bnd of placedBands){
+        if (Math.abs(bnd.y - y) > 0.5) continue;
+        if (Math.min(bnd.x2, rightX) - Math.max(bnd.x1, leftX) > 1) penalty += 1000;
       }
-      if (hits < best){ best = hits; bandY = y; }
-      if (!hits) break;
+      for (const v of verticals){
+        if (v.x > leftX + 1 && v.x < rightX - 1 && y > Math.min(v.y1,v.y2) + 1 && y < Math.max(v.y1,v.y2) - 1) penalty++;
+      }
+      if (penalty < best){ best = penalty; bandY = y; }
+      if (!penalty) break;
     }
-    addLine(ax, py(a.depth) + NODE_H, ax, bandY);          // спуск от одного супруга
-    addLine(bx, py(b.depth) + NODE_H, bx, bandY);          // спуск от другого
-    addLine(leftX, bandY, rightX, bandY);                  // общая перекладина пары
+    const clan = clanOf[e.a];
+    addLine(ax, py(a.depth) + NODE_H, ax, bandY, clan);    // спуск от одного супруга
+    addLine(bx, py(b.depth) + NODE_H, bx, bandY, clan);    // спуск от другого
+    addLine(leftX, bandY, rightX, bandY, clan);            // общая перекладина пары
+    placedBands.push({ y: bandY, x1: leftX, x2: rightX });
     verticals.push({ x: ax, y1: py(a.depth) + NODE_H, y2: bandY });
     verticals.push({ x: bx, y1: py(b.depth) + NODE_H, y2: bandY });
     for (const p of kidPositions){
-      addLine(px(p.x), bandY, px(p.x), py(p.depth));       // дети висят на ней
+      addLine(px(p.x), bandY, px(p.x), py(p.depth), clan); // дети висят на ней
       verticals.push({ x: px(p.x), y1: bandY, y2: py(p.depth) });
     }
   }
 
-  return segments;
+  // ---- мостики на пересечениях ------------------------------------------
+  // Там, где горизонталь пересекает чужую вертикаль, рисуем не крест, а
+  // «мостик»: горизонталь делает маленькую дугу поверх вертикали. Так сразу
+  // видно, что линии именно ПЕРЕСЕКАЮТСЯ, а не соединяются в этой точке, —
+  // без мостика перекрестье читается как развилка, и понять, куда ведёт
+  // каждая ветвь, невозможно. Приём стандартный для схем и чертежей.
+  const HOP_R = 5;
+  const vertSegs = segments.filter(s => s.type === "line" && Math.abs(s.x1 - s.x2) < 0.5);
+  const withHops = [];
+  for (const s of segments){
+    const isH = s.type === "line" && Math.abs(s.y1 - s.y2) < 0.5;
+    if (!isH){ withHops.push(s); continue; }
+    const y = s.y1;
+    const lo = Math.min(s.x1, s.x2), hi = Math.max(s.x1, s.x2);
+    const xs = [];
+    for (const v of vertSegs){
+      const vTop = Math.min(v.y1, v.y2), vBot = Math.max(v.y1, v.y2);
+      if (v.x1 > lo + HOP_R && v.x1 < hi - HOP_R && y > vTop + 0.5 && y < vBot - 0.5) xs.push(v.x1);
+    }
+    if (!xs.length){ withHops.push(s); continue; }
+    xs.sort((a, b) => a - b);
+    let d = "M " + lo + " " + y;
+    for (const xc of xs){
+      d += " L " + (xc - HOP_R) + " " + y +
+           " A " + HOP_R + " " + HOP_R + " 0 0 1 " + (xc + HOP_R) + " " + y;
+    }
+    d += " L " + hi + " " + y;
+    // сохраняем и прямые координаты: для всех проверок и расчётов это
+    // по-прежнему обычный горизонтальный отрезок, дуги — только отрисовка
+    withHops.push({ type: "path", d, clan: s.clan, x1: lo, y1: y, x2: hi, y2: y, hops: xs.length });
+  }
+  return withHops;
+}
+
+/* Цвет линии по номеру рода. Родов может быть больше, чем цветов в
+   палитре, поэтому номера идут по кругу — соседние рода при этом всё равно
+   получают разные цвета, так как выкладываются подряд. */
+const CLAN_COLOR_COUNT = 8;
+function clanStroke(clan){
+  return "var(--clan-" + ((((clan | 0) % CLAN_COLOR_COUNT) + CLAN_COLOR_COUNT) % CLAN_COLOR_COUNT + 1) + ")";
 }
 
 function svgEl(tag, attrs){
@@ -1510,10 +1606,10 @@ function renderTree(){
   // что рисует и экспорт в PNG, единым стилем без исключений
   for (const seg of computeConnectors(layout)){
     if (seg.type === "line"){
-      linesLayer.appendChild(svgEl("line", { x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2, stroke: "var(--line)", "stroke-width": 2 }));
+      linesLayer.appendChild(svgEl("line", { x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2, stroke: clanStroke(seg.clan), "stroke-width": 2 }));
     } else {
-      const d = seg.points.map((pt, i) => (i === 0 ? "M " : "L ") + pt[0] + " " + pt[1]).join(" ");
-      linesLayer.appendChild(svgEl("path", { d, fill: "none", stroke: "var(--line)", "stroke-width": 2 }));
+      const d = seg.d || seg.points.map((pt, i) => (i === 0 ? "M " : "L ") + pt[0] + " " + pt[1]).join(" ");
+      linesLayer.appendChild(svgEl("path", { d, fill: "none", stroke: clanStroke(seg.clan), "stroke-width": 2 }));
     }
   }
 
@@ -2235,14 +2331,14 @@ function buildExportSvg(layout, w, h, colors){
     if (seg.type === "line"){
       const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
       l.setAttribute("x1", seg.x1); l.setAttribute("y1", seg.y1); l.setAttribute("x2", seg.x2); l.setAttribute("y2", seg.y2);
-      l.setAttribute("stroke", colors.line); l.setAttribute("stroke-width", 2);
+      l.setAttribute("stroke", colors.clan(seg.clan)); l.setAttribute("stroke-width", 2);
       linesG.appendChild(l);
     } else {
-      const d = seg.points.map((pt, i) => (i === 0 ? "M " : "L ") + pt[0] + " " + pt[1]).join(" ");
+      const d = seg.d || seg.points.map((pt, i) => (i === 0 ? "M " : "L ") + pt[0] + " " + pt[1]).join(" ");
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", d);
       p.setAttribute("fill", "none");
-      p.setAttribute("stroke", colors.line); p.setAttribute("stroke-width", 2);
+      p.setAttribute("stroke", colors.clan(seg.clan)); p.setAttribute("stroke-width", 2);
       linesG.appendChild(p);
     }
   }
@@ -2307,6 +2403,12 @@ async function exportTreeAsImage(){
     unknown: cssVar("--unknown", "#8a8272"), unknownBg: cssVar("--unknown-bg", "#eeeae1"),
     line: cssVar("--line", "#b8ac93")
   };
+  // В экспортируемом SVG переменные темы не работают — там нет нашей
+  // страницы со стилями. Поэтому цвета родов подставляем готовыми
+  // значениями, вычисленными из текущей темы.
+  const clanFallback = ["#8a6a3a","#3f6f7a","#7a4a63","#5c6b3a","#6a4a8a","#8a5540","#3f6b52","#7a6a2f"];
+  const clanColors = clanFallback.map((def, i) => cssVar("--clan-" + (i+1), def));
+  colors.clan = (clan) => clanColors[((((clan | 0) % clanColors.length) + clanColors.length) % clanColors.length)];
 
   const exportSvg = buildExportSvg(layout, w, h, colors);
   const svgString = new XMLSerializer().serializeToString(exportSvg);
