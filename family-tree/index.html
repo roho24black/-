@@ -46,6 +46,10 @@
   --clan-6:#8a5540;
   --clan-7:#3f6b52;
   --clan-8:#7a6a2f;
+  --clan-9:#5a5f8a;
+  --clan-10:#8a4a4a;
+  --clan-11:#2f6a6a;
+  --clan-12:#6b5a2f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -74,6 +78,10 @@
     --clan-6:#d69479;
     --clan-7:#6fbb94;
     --clan-8:#c4b268;
+    --clan-9:#9aa0d6;
+    --clan-10:#d68a8a;
+    --clan-11:#6fb8b8;
+    --clan-12:#bda87a;
   }
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -1312,22 +1320,45 @@ function computeLayout(){
   const width = Math.max(canvasCursor, ...Object.values(positions).map(p => p.x + rightEdgeSlots));
   const maxDepth = Math.max(0, ...Object.values(rowOf));
 
-  // Номер рода для каждого человека — по тому корневому юниту леса, к
-  // которому он относится. По нему линиям назначается цвет, чтобы ветви
-  // разных родословных не сливались друг с другом. Пришедшие в семью
-  // супруги (partnerElsewhere) в rootOf не попадают — им род назначаем по
-  // собственной родословной, если она есть, иначе по мужу/жене.
-  const clanOf = {};
-  forest.forEach((u, i) => { for (const id of membersOf(u)) clanOf[id] = i; });
-  for (const p of allPersons()){
-    if (clanOf[p.id] != null) continue;
-    const own = rootOf.get(p.id);
-    if (own){ clanOf[p.id] = forest.indexOf(own); continue; }
-    for (const sid of (p.spouseIds || [])){
-      if (clanOf[sid] != null){ clanOf[p.id] = clanOf[sid]; break; }
-    }
-    if (clanOf[p.id] == null) clanOf[p.id] = 0;
+  // Род для окраски линий — это ФАМИЛИЯ, а не ветка обхода. Раньше род
+  // брался по корневому юниту леса, и получалось не по-человечески: дети
+  // Аскаровы, размещённые через свою мать (урождённую Магид), попадали в
+  // род Магид и красились с ними одним цветом, хотя это разные фамилии.
+  // Мужская и женская формы одной фамилии считаются одним родом, иначе
+  // Аскаров и Аскарова оказались бы разного цвета.
+  function clanKey(person){
+    const raw = (person.lastName || "").trim().toLowerCase();
+    if (!raw) return "";
+    let s = raw;
+    // Новаковская → новаковский, Шувалова → шувалов, Кудрявцева → кудрявцев
+    if (/(ская|цкая)$/.test(s)) s = s.replace(/ая$/, "ий");
+    else if (/ая$/.test(s)) s = s.replace(/ая$/, "ий");
+    else if (/(ов|ев|ёв|ин|ын)а$/.test(s)) s = s.slice(0, -1);
+    return s;
   }
+  const keyOfPerson = {};
+  for (const p of allPersons()) keyOfPerson[p.id] = clanKey(p);
+  // Человеку без фамилии род достаётся от супруга или от отца — иначе все
+  // безымянные слились бы в один цвет.
+  for (const p of allPersons()){
+    if (keyOfPerson[p.id]) continue;
+    const donors = [...(p.spouseIds || []), p.fatherId, p.motherId];
+    for (const d of donors){ if (d && keyOfPerson[d]){ keyOfPerson[p.id] = keyOfPerson[d]; break; } }
+  }
+  // Порядок цветов — слева направо по холсту: соседние на экране рода
+  // получают соседние (то есть разные) цвета палитры.
+  const firstX = new Map();
+  for (const p of allPersons()){
+    const k = keyOfPerson[p.id] || "";
+    const pos = positions[p.id];
+    if (!pos) continue;
+    if (!firstX.has(k) || pos.x < firstX.get(k)) firstX.set(k, pos.x);
+  }
+  const orderedKeys = Array.from(firstX.keys()).sort((a, b) => firstX.get(a) - firstX.get(b));
+  const indexOfKey = new Map();
+  orderedKeys.forEach((k, i) => indexOfKey.set(k, i));
+  const clanOf = {};
+  for (const p of allPersons()) clanOf[p.id] = indexOfKey.get(keyOfPerson[p.id] || "") || 0;
 
   return { positions, marriageEdges, coupleSlots, fallbackConnectors, childEdges, width, maxDepth, clanOf };
 }
@@ -1346,6 +1377,14 @@ function computeConnectors(layout){
   // вырожденные отрезки (обе точки совпали) отбрасываем: в SVG это пустой
   // элемент, который ничего не рисует, но засоряет схему и сбивает проверки
   const clanOf = layout.clanOf || {};
+  // Линия пары принадлежит роду, фамилию которого носит семья, — обычно это
+  // род мужа. Если пол не указан, берём любого из двоих.
+  function coupleClan(aId, bId){
+    const A = aId ? P(aId) : null, B = bId ? P(bId) : null;
+    if (A && A.gender === "M" && clanOf[aId] != null) return clanOf[aId];
+    if (B && B.gender === "M" && clanOf[bId] != null) return clanOf[bId];
+    return clanOf[aId] != null ? clanOf[aId] : clanOf[bId];
+  }
   // caждый отрезок помечается номером рода — по нему при отрисовке
   // выбирается цвет, чтобы ветви разных родословных не сливались
   const addLine = (x1, y1, x2, y2, clan) => {
@@ -1366,7 +1405,7 @@ function computeConnectors(layout){
     const goingRight = b.x >= a.x;
     const ax = px(a.x) + (goingRight ? NODE_W / 2 : -NODE_W / 2);
     const bx = px(b.x) + (goingRight ? -NODE_W / 2 : NODE_W / 2);
-    addLine(ax, y, bx, y, clanOf[e.a]);
+    addLine(ax, y, bx, y, coupleClan(e.a, e.b));
   }
 
   // ---- классифицируем связи разъехавшихся пар --------------------------
@@ -1446,7 +1485,11 @@ function computeConnectors(layout){
     // ствол повисал в воздухе, начинаясь ни от чего. В этом случае опускаем
     // его от карточки самого родителя, а до детей дотягивается перекладина.
     const stemX = (e.parentBAdjacent && posBx != null) ? midX : px(posA.x);
-    const clan = clanOf[e.parentAId];
+    // Ветка «родители → дети» принадлежит роду СЕМЬИ — то есть отца, чью
+    // фамилию носят дети. Брать род первого ребёнка нельзя: дочь, вышедшая
+    // замуж, носит уже фамилию мужа, и ветка родителей окрасилась бы в цвет
+    // чужого рода.
+    const clan = coupleClan(e.parentAId, e.parentBId);
     addLine(stemX, parentBottomY, stemX, trunkY, clan);    // ствол вниз от родителей
     verticals.push({ x: stemX, y1: parentBottomY, y2: trunkY });
     const barMinX = Math.min(stemX, ...kidXs), barMaxX = Math.max(stemX, ...kidXs);
@@ -1463,7 +1506,7 @@ function computeConnectors(layout){
     const y = py(a.depth) + NODE_H / 2;
     const goingRight = b.x >= a.x;
     addLine(px(a.x) + (goingRight ? NODE_W/2 : -NODE_W/2), y,
-            px(b.x) + (goingRight ? -NODE_W/2 : NODE_W/2), y, clanOf[e.a]);
+            px(b.x) + (goingRight ? -NODE_W/2 : NODE_W/2), y, coupleClan(e.a, e.b));
   }
 
   // ---- обходные связи: линия пары И ЕСТЬ перекладина её детей ------------
@@ -1506,7 +1549,7 @@ function computeConnectors(layout){
       if (penalty < best){ best = penalty; bandY = y; }
       if (!penalty) break;
     }
-    const clan = clanOf[e.a];
+    const clan = coupleClan(e.a, e.b);
     addLine(ax, py(a.depth) + NODE_H, ax, bandY, clan);    // спуск от одного супруга
     addLine(bx, py(b.depth) + NODE_H, bx, bandY, clan);    // спуск от другого
     addLine(leftX, bandY, rightX, bandY, clan);            // общая перекладина пары
@@ -1556,7 +1599,7 @@ function computeConnectors(layout){
 /* Цвет линии по номеру рода. Родов может быть больше, чем цветов в
    палитре, поэтому номера идут по кругу — соседние рода при этом всё равно
    получают разные цвета, так как выкладываются подряд. */
-const CLAN_COLOR_COUNT = 8;
+const CLAN_COLOR_COUNT = 12;
 function clanStroke(clan){
   return "var(--clan-" + ((((clan | 0) % CLAN_COLOR_COUNT) + CLAN_COLOR_COUNT) % CLAN_COLOR_COUNT + 1) + ")";
 }
@@ -2406,7 +2449,8 @@ async function exportTreeAsImage(){
   // В экспортируемом SVG переменные темы не работают — там нет нашей
   // страницы со стилями. Поэтому цвета родов подставляем готовыми
   // значениями, вычисленными из текущей темы.
-  const clanFallback = ["#8a6a3a","#3f6f7a","#7a4a63","#5c6b3a","#6a4a8a","#8a5540","#3f6b52","#7a6a2f"];
+  const clanFallback = ["#8a6a3a","#3f6f7a","#7a4a63","#5c6b3a","#6a4a8a","#8a5540","#3f6b52","#7a6a2f",
+                        "#5a5f8a","#8a4a4a","#2f6a6a","#6b5a2f"];
   const clanColors = clanFallback.map((def, i) => cssVar("--clan-" + (i+1), def));
   colors.clan = (clan) => clanColors[((((clan | 0) % clanColors.length) + clanColors.length) % clanColors.length)];
 
